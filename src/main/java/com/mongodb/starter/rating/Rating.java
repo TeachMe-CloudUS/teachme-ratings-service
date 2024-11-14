@@ -24,5 +24,5 @@ public class Rating {
     LocalDateTime date;
 
     @Id
-    private String id;;
+    private String id;
 }
