@@ -27,7 +27,7 @@ public class RatingService {
 	}
 
     @Transactional(readOnly = true)
-	public Rating findRatingById(int id) throws DataAccessException {
+	public Rating findRatingById(String id) throws DataAccessException {
 		return ratingRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Paper", "ID", id));
 	}
 
@@ -38,14 +38,14 @@ public class RatingService {
 	}
 
     @Transactional
-	public Rating updateRating(Rating rating, int id) {
+	public Rating updateRating(Rating rating, String id) {
 		Rating toUpdate = findRatingById(id);
 		BeanUtils.copyProperties(rating, toUpdate, "id");
 		return saveRating(toUpdate);
 	}
 
 	@Transactional
-	public void deleteRating(int id) throws DataAccessException {
+	public void deleteRating(String id) throws DataAccessException {
 		Rating toDelete = findRatingById(id);
 		ratingRepository.delete(toDelete);
 	}
