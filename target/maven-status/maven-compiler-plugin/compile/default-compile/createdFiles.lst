@@ -1,0 +1,11 @@
+com\mongodb\starter\exceptions\ResourceNotFoundException.class
+com\mongodb\starter\util\RestPreconditions.class
+com\mongodb\starter\exceptions\EntityNotFoundException.class
+com\mongodb\starter\util\MessageResponse.class
+com\mongodb\starter\HelloController.class
+com\mongodb\starter\MongoClientConfig.class
+com\mongodb\starter\rating\RatingController.class
+com\mongodb\starter\ApplicationStarter.class
+com\mongodb\starter\rating\RatingRepository.class
+com\mongodb\starter\rating\Rating.class
+com\mongodb\starter\rating\RatingService.class
