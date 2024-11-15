@@ -20,6 +20,7 @@ import com.mongodb.starter.util.MessageResponse;
 import com.mongodb.starter.util.RestPreconditions;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/ratings")
@@ -38,7 +39,7 @@ public class RatingController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public ResponseEntity<Rating> create(@RequestBody Rating rating){
+	public ResponseEntity<Rating> create(@RequestBody @Valid Rating rating){
 		Rating newRating = new Rating();
 		Rating savedRating;
 		BeanUtils.copyProperties(rating, newRating, "id");
@@ -61,7 +62,7 @@ public class RatingController {
 
 	@PutMapping("/{ratingId}")
 	@ResponseStatus(HttpStatus.OK)
-	public ResponseEntity<Rating> update(@PathVariable("ratingId") String ratingId, @RequestBody Rating rating) {
+	public ResponseEntity<Rating> update(@PathVariable("ratingId") String ratingId, @RequestBody @Valid Rating rating) {
 		Rating aux = RestPreconditions.checkNotNull(ratingService.findRatingById(ratingId), "Rating", "ID", ratingId);
 		// Integer id = Integer.parseInt(userId);
 		// User loggedUser = userService.findUser(id);
