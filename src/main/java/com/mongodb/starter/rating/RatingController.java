@@ -21,7 +21,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/v1/course/{courseId}ratings")
+@RequestMapping("/api/v1/course/{courseId}/ratings/")
 @Tag(name = "Ratings", description = "The ratings management API")
 public class RatingController {
     
@@ -37,11 +37,12 @@ public class RatingController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public ResponseEntity<Rating> create(@RequestBody @Valid Rating rating){
+	public ResponseEntity<Rating> create(@PathVariable("courseId") String courseId,@RequestBody @Valid Rating rating){
 		//TODO: petición a microservicio user para obtener el usuario loggeado
 		Rating newRating = new Rating();
 		Rating savedRating;
 		BeanUtils.copyProperties(rating, newRating, "id");
+		newRating.setCourseId(courseId);
 		savedRating = this.ratingService.saveRating(newRating);
 		return new ResponseEntity<>(savedRating, HttpStatus.OK);
 	}
@@ -49,7 +50,7 @@ public class RatingController {
 
     //DELETE	
 
-	@DeleteMapping("/{ratingId}")
+	@DeleteMapping("{ratingId}")
 	@ResponseStatus(HttpStatus.OK)
 	public ResponseEntity<MessageResponse> delete(@PathVariable("ratingId") String ratingId) {
 		//TODO: petición a microservicio user para obtener el usuario loggeado
@@ -60,7 +61,7 @@ public class RatingController {
 
     //UPDATE
 
-	@PutMapping("/{ratingId}")
+	@PutMapping("{ratingId}")
 	@ResponseStatus(HttpStatus.OK)
 	public ResponseEntity<Rating> update(@PathVariable("ratingId") String ratingId, @RequestBody @Valid Rating rating) {
 		Rating aux = RestPreconditions.checkNotNull(ratingService.findRatingById(ratingId), "Rating", "ID", ratingId);
@@ -75,15 +76,15 @@ public class RatingController {
 
     //GET BY ID
 
-	@GetMapping("/{ratingId}")
+	@GetMapping("{ratingId}")
 	public ResponseEntity<Rating> findById(@PathVariable("ratingId") String ratingId) {
 		Rating rating = RestPreconditions.checkNotNull(ratingService.findRatingById(ratingId), "Paper", "ID", ratingId);
 			return new ResponseEntity<>(rating, HttpStatus.OK);
 	} 
 
     @GetMapping
-	public ResponseEntity<List<Rating>> findAll() {
-	    return new ResponseEntity<>((List<Rating>) this.ratingService.findAll(), HttpStatus.OK);
+	public ResponseEntity<List<Rating>> findAllByCourse(@PathVariable("courseId") String courseId) {
+	    return new ResponseEntity<>((List<Rating>) this.ratingService.findAllRatingsByCourse(courseId), HttpStatus.OK);
 
 	}
 
