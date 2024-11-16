@@ -31,6 +31,11 @@ public class RatingService {
 		return ratingRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Paper", "ID", id));
 	}
 
+	@Transactional(readOnly = true)
+	public List<Rating> findAllRatingsByCourse(String courseId) throws DataAccessException {
+		return ratingRepository.findAllRatingsByCourse(courseId);
+	}
+
     @Transactional
 	public Rating saveRating(Rating rating){
         ratingRepository.save(rating);
