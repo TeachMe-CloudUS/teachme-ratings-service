@@ -30,8 +30,8 @@ class RatingServiceIntegrationTest extends TestContainersConfig {
         Rating existingRating = new Rating();
         existingRating.setDescription("description");
         existingRating.setRating(3);
-        existingRating.setUser("testUser");
-        existingRating.setCourse("course1");
+        existingRating.setUserId("testUser");
+        existingRating.setCourseId("course1");
         
         ratingRepository.save(existingRating);
     }
@@ -48,7 +48,7 @@ class RatingServiceIntegrationTest extends TestContainersConfig {
 
         assertThat(foundRatings)
             .hasSize(2)
-            .extracting("course")
+            .extracting("courseId")
             .containsExactlyInAnyOrder("course1", "course2");
     }
 
@@ -63,8 +63,8 @@ class RatingServiceIntegrationTest extends TestContainersConfig {
                 assertThat(found.getId()).isEqualTo(rating.getId());
                 assertThat(found.getDescription()).isEqualTo(rating.getDescription());
                 assertThat(found.getRating()).isEqualTo(rating.getRating());
-                assertThat(found.getUser()).isEqualTo(rating.getUser());
-                assertThat(found.getCourse()).isEqualTo(rating.getCourse());
+                assertThat(found.getUserId()).isEqualTo(rating.getUserId());
+                assertThat(found.getCourseId()).isEqualTo(rating.getCourseId());
             });
     }
 
@@ -86,8 +86,8 @@ class RatingServiceIntegrationTest extends TestContainersConfig {
             .satisfies(found -> {
                 assertThat(found.getDescription()).isEqualTo(rating.getDescription());
                 assertThat(found.getRating()).isEqualTo(rating.getRating());
-                assertThat(found.getUser()).isEqualTo(rating.getUser());
-                assertThat(found.getCourse()).isEqualTo(rating.getCourse());
+                assertThat(found.getUserId()).isEqualTo(rating.getUserId());
+                assertThat(found.getCourseId()).isEqualTo(rating.getCourseId());
             });
     }
 
@@ -100,8 +100,8 @@ class RatingServiceIntegrationTest extends TestContainersConfig {
         Rating updateData = new Rating();
         updateData.setDescription("Updated description");
         updateData.setRating(5);
-        updateData.setUser("updatedUser");
-        updateData.setCourse(existingRating.getCourse());
+        updateData.setUserId("updatedUser");
+        updateData.setCourseId(existingRating.getCourseId());
 
         // System.out.println("\n\nUpdateData: " + updateData.getCourse());
 
@@ -113,8 +113,8 @@ class RatingServiceIntegrationTest extends TestContainersConfig {
                 assertThat(rating.getId()).isEqualTo(existingRating.getId());
                 assertThat(rating.getDescription()).isEqualTo(updateData.getDescription());
                 assertThat(rating.getRating()).isEqualTo(updateData.getRating());
-                assertThat(rating.getUser()).isEqualTo(updateData.getUser());
-                assertThat(rating.getCourse()).isEqualTo(existingRating.getCourse());
+                assertThat(rating.getUserId()).isEqualTo(updateData.getUserId());
+                assertThat(rating.getCourseId()).isEqualTo(existingRating.getCourseId());
             });
     }
 
@@ -143,8 +143,8 @@ class RatingServiceIntegrationTest extends TestContainersConfig {
         Rating rating = new Rating();
         rating.setDescription("Test description");
         rating.setRating(4);
-        rating.setUser("testUser");
-        rating.setCourse(course);
+        rating.setUserId("testUser");
+        rating.setCourseId(course);
         rating.setDate(LocalDateTime.now());
         return rating;
     }
@@ -154,8 +154,8 @@ class RatingServiceIntegrationTest extends TestContainersConfig {
         Rating minimumValidRating = new Rating();
         minimumValidRating.setDescription("description");
         minimumValidRating.setRating(1);
-        minimumValidRating.setUser("user1");
-        minimumValidRating.setCourse("course1");
+        minimumValidRating.setUserId("user1");
+        minimumValidRating.setCourseId("course1");
     
         Rating savedRating = ratingService.saveRating(minimumValidRating);
     
@@ -189,8 +189,8 @@ class RatingServiceIntegrationTest extends TestContainersConfig {
         Rating invalidScoreRating = new Rating();
         invalidScoreRating.setDescription("Invalid score");
         invalidScoreRating.setRating(0); // Valor menor al mínimo permitido
-        invalidScoreRating.setUser("user1");
-        invalidScoreRating.setCourse("course1");
+        invalidScoreRating.setUserId("user1");
+        invalidScoreRating.setCourseId("course1");
 
         assertThrows(ValidationException.class, 
             () -> ratingService.saveRating(invalidScoreRating));
@@ -203,8 +203,8 @@ class RatingServiceIntegrationTest extends TestContainersConfig {
         Rating updateData = new Rating();
         updateData.setDescription("Updated description");
         updateData.setRating(0); // Valor inválido
-        updateData.setUser("updatedUser");
-        updateData.setCourse("course1");
+        updateData.setUserId("updatedUser");
+        updateData.setCourseId("course1");
 
         assertThrows(ValidationException.class, 
             () -> ratingService.updateRating(updateData, existingRating.getId()));
