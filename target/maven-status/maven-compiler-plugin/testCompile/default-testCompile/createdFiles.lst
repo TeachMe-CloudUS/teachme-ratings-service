@@ -1,3 +1,4 @@
 com\mongodb\starter\config\TestContainersConfig.class
 com\mongodb\starter\rating\RatingControllerIntegrationTest.class
+com\mongodb\starter\rating\RatingServiceUnitaryTest.class
 com\mongodb\starter\rating\RatingServiceIntegrationTest.class

@@ -33,4 +33,5 @@ public class Rating {
 
     @Id
     private String id;
+
 }
