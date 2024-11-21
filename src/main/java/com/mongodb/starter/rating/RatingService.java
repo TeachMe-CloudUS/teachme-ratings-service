@@ -28,7 +28,7 @@ public class RatingService {
 
     @Transactional(readOnly = true)
 	public Rating findRatingById(String id) throws DataAccessException {
-		return ratingRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Paper", "ID", id));
+		return ratingRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Rating", "ID", id));
 	}
 
 	@Transactional(readOnly = true)
