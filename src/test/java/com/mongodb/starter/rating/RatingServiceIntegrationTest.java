@@ -12,11 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import com.mongodb.starter.config.TestContainersConfig;
 import com.mongodb.starter.exceptions.ResourceNotFoundException;
 
 @SpringBootTest
-class RatingServiceIntegrationTest extends TestContainersConfig {
+class RatingServiceIntegrationTest {
 
     @Autowired
     private RatingService ratingService;
