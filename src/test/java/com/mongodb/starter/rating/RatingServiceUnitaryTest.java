@@ -73,7 +73,6 @@ public class RatingServiceUnitaryTest{
     public void shouldReturnAllRatingsByCourse(){
         Rating rating1 = constructorRating("rate1","No me ha gustado nada",1,"user1","course1");
         Rating rating2 = constructorRating("rate2","No estaba mal",3,"user2","course1");
-        Rating rating3 = constructorRating("rate3","Me ha encantado",5,"user3","course2");
         when(ratingRepository.findAllRatingsByCourse("course1")).thenReturn(Arrays.asList(rating1, rating2));
 
         Collection<Rating> result = ratingService.findAllRatingsByCourse("course1");
