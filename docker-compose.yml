@@ -1,0 +1,14 @@
+services:
+  rating-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      FEATURE_FLAG: "true"
+      API_ENDPOINT: "https://api/v1/course/{courseId}/ratings.com"
+      MONGODB_URI: "mongodb+srv://${MONGODB_USER}:${MONGODB_PASSWORD}@cluster0.bpad4.mongodb.net/"
+
+    env_file:
+      - .env  # Opcional: Usar un archivo .env para manejar las variables de entorno (como MONGODB_USER y MONGODB_PASSWORD)

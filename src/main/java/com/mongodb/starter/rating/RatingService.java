@@ -55,4 +55,10 @@ public class RatingService {
 		ratingRepository.delete(toDelete);
 	}
 
+	@Transactional(readOnly =true)
+	public Double ratingMean(String courseId){
+		List<Integer> ratings = findAllRatingsByCourse(courseId).stream().map(x -> x.getRating()).toList();
+		Double mean = ratings.stream().mapToDouble(Integer:: doubleValue).average().orElse(0.0);
+		return mean;
+	}
 }

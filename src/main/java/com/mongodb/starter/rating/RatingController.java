@@ -44,6 +44,8 @@ public class RatingController {
 		BeanUtils.copyProperties(rating, newRating, "id");
 		newRating.setCourseId(courseId);
 		savedRating = this.ratingService.saveRating(newRating);
+		Double mean = this.ratingService.ratingMean(courseId);
+		//TODO: petición asíncrona a microservicio course para actualizar rating
 		return new ResponseEntity<>(savedRating, HttpStatus.OK);
 	}
 
@@ -52,10 +54,12 @@ public class RatingController {
 
 	@DeleteMapping("{ratingId}")
 	@ResponseStatus(HttpStatus.OK)
-	public ResponseEntity<MessageResponse> delete(@PathVariable("ratingId") String ratingId) {
+	public ResponseEntity<MessageResponse> delete(@PathVariable("courseId") String courseId, @PathVariable("ratingId") String ratingId) {
 		//TODO: petición a microservicio user para obtener el usuario loggeado
 		Rating rating = RestPreconditions.checkNotNull(ratingService.findRatingById(ratingId), "Rating", "ID", ratingId);
 		ratingService.deleteRating(ratingId);
+		Double mean = this.ratingService.ratingMean(courseId);
+		//TODO: petición asíncrona a microservicio course para actualizar rating
 		return new ResponseEntity<>(new MessageResponse("Rating deleted!"), HttpStatus.OK);
 	}
 
@@ -63,7 +67,7 @@ public class RatingController {
 
 	@PutMapping("{ratingId}")
 	@ResponseStatus(HttpStatus.OK)
-	public ResponseEntity<Rating> update(@PathVariable("ratingId") String ratingId, @RequestBody @Valid Rating rating) {
+	public ResponseEntity<Rating> update(@PathVariable("courseId") String courseId, @PathVariable("ratingId") String ratingId, @RequestBody @Valid Rating rating) {
 		Rating aux = RestPreconditions.checkNotNull(ratingService.findRatingById(ratingId), "Rating", "ID", ratingId);
 		//TODO: petición a microservicio user para obtener el usuario loggeado
 		// Integer id = Integer.parseInt(userId);
@@ -71,6 +75,8 @@ public class RatingController {
 		// 	User paperUser = aux.getUser();
 		// 	if (loggedUser.getId().equals(paperUser.getId())) {
 		Rating res = ratingService.updateRating(rating, ratingId);
+		Double mean = this.ratingService.ratingMean(courseId);
+		//TODO: petición asíncrona a microservicio course para actualizar rating
 		return new ResponseEntity<>(res, HttpStatus.OK);
     }
 

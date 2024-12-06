@@ -114,21 +114,31 @@ public class RatingServiceUnitaryTest{
 
     @Test
     public void testDeleteRating() {
-    // Datos simulados
-    String ratingId = "rate1";
-    Rating existingRating = new Rating();
-    existingRating.setId(ratingId);
+        String ratingId = "rate1";
+        Rating existingRating = new Rating();
+        existingRating.setId(ratingId);
 
-    // Configurar mocks
-    when(ratingRepository.findById(ratingId)).thenReturn(Optional.of(existingRating));
-    doNothing().when(ratingRepository).delete(existingRating);
+        when(ratingRepository.findById(ratingId)).thenReturn(Optional.of(existingRating));
+        doNothing().when(ratingRepository).delete(existingRating);
 
-    // Llamar al método a probar
-    ratingService.deleteRating(ratingId);
+        ratingService.deleteRating(ratingId);
 
-    // Verificar interacciones con los mocks
-    verify(ratingRepository, times(1)).findById(ratingId);
-    verify(ratingRepository, times(1)).delete(existingRating);
+        verify(ratingRepository, times(1)).findById(ratingId);
+        verify(ratingRepository, times(1)).delete(existingRating);
+    }
+
+    @Test
+    public void testRatingMean() {
+        String courseId = "course1";
+        Rating rating1 = constructorRating("rate1","No me ha gustado nada",1,"user1","course1");
+        Rating rating2 = constructorRating("rate2","No estaba mal",2,"user2","course1");
+
+        when(ratingService.findAllRatingsByCourse(courseId)).thenReturn(Arrays.asList(rating1, rating2));
+
+        Double result = ratingService.ratingMean(courseId);
+
+        assertEquals(1.5, result);
+
     }
 
     
