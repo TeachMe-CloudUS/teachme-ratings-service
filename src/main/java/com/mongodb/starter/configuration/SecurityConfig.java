@@ -15,6 +15,7 @@ public class SecurityConfig{
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> {
                 auth.requestMatchers("/api/v1/course/**").permitAll();
+                auth.requestMatchers("/hola").permitAll();
             })
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
