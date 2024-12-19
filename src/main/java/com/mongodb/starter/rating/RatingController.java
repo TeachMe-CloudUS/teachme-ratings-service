@@ -12,11 +12,16 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+
+import com.mongodb.starter.student.StudentDto;
 import com.mongodb.starter.util.MessageResponse;
 import com.mongodb.starter.util.RestPreconditions;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -34,24 +39,42 @@ public class RatingController {
 
 
     //CREATE	
-
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public ResponseEntity<Rating> create(@PathVariable("courseId") String courseId,@RequestBody @Valid Rating rating){
-		//TODO: petición a microservicio user para obtener el usuario loggeado
+	@CircuitBreaker(name = "circuit_active", fallbackMethod = "controllerFallback")
+	public ResponseEntity<Rating> create(@PathVariable("courseId") String courseId, @RequestParam("studentId") String studentId, 
+																					@RequestBody @Valid Rating rating) {
 		Rating newRating = new Rating();
-		Rating savedRating;
 		BeanUtils.copyProperties(rating, newRating, "id");
 		newRating.setCourseId(courseId);
-		savedRating = this.ratingService.saveRating(newRating);
+
+		String studentServiceUrl = "/api/v1/students/{studentId}";
+		RestTemplate restTemplate = new RestTemplate();
+
+		try {
+			StudentDto studentDto = restTemplate.getForObject(studentServiceUrl, StudentDto.class, studentId);
+			if (studentDto != null) {
+				newRating.setUserName(studentDto.getUserName());
+			} else {
+				return new ResponseEntity<>(HttpStatus.NOT_FOUND); 
+			}
+		} catch (Exception e) {
+			return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE); 
+		}
+
+		Rating savedRating = this.ratingService.saveRating(newRating);
 		Double mean = this.ratingService.ratingMean(courseId);
-		//TODO: petición asíncrona a microservicio course para actualizar rating
-		return new ResponseEntity<>(savedRating, HttpStatus.OK);
+
+		return new ResponseEntity<>(savedRating, HttpStatus.CREATED);
 	}
+
+	public ResponseEntity<String> controllerFallback(Throwable throwable) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                             .body("Fallback Circuit Breaker Activo: " + throwable.getMessage());
+    }
 
 
     //DELETE	
-
 	@DeleteMapping("{ratingId}")
 	@ResponseStatus(HttpStatus.OK)
 	public ResponseEntity<MessageResponse> delete(@PathVariable("courseId") String courseId, @PathVariable("ratingId") String ratingId) {

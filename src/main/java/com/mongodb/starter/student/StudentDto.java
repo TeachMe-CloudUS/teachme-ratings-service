@@ -13,5 +13,4 @@ public class StudentDto {
         this.id = id;
         this.userName = userName;
     }
-
 }
