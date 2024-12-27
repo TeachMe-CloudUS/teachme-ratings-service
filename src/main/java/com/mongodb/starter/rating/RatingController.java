@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import com.mongodb.starter.student.StudentDto;
@@ -31,46 +32,42 @@ import jakarta.validation.Valid;
 public class RatingController {
     
     private final RatingService ratingService;
-
+    private final RestTemplate restTemplate;
+    
     @Autowired
-	public RatingController(RatingService ratingService) {
-		this.ratingService = ratingService;
-	}
+    public RatingController(RatingService ratingService, RestTemplate restTemplate) {
+        this.ratingService = ratingService;
+        this.restTemplate = restTemplate;
+    }
 
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+	@CircuitBreaker(name = "createRating", fallbackMethod = "controllerFallback")
+    public ResponseEntity<Rating> create(@PathVariable("courseId") String courseId, 
+                                       @RequestParam("studentId") String studentId, 
+                                       @RequestBody @Valid Rating rating) {
+        Rating newRating = new Rating();
+        BeanUtils.copyProperties(rating, newRating, "id");
+        newRating.setCourseId(courseId);
 
-    //CREATE	
-	@PostMapping
-	@ResponseStatus(HttpStatus.CREATED)
-	@CircuitBreaker(name = "circuit_active", fallbackMethod = "controllerFallback")
-	public ResponseEntity<Rating> create(@PathVariable("courseId") String courseId, @RequestParam("studentId") String studentId, 
-																					@RequestBody @Valid Rating rating) {
-		Rating newRating = new Rating();
-		BeanUtils.copyProperties(rating, newRating, "id");
-		newRating.setCourseId(courseId);
+        // Eliminamos el try-catch para permitir que el Circuit Breaker maneje las excepciones
+        StudentDto studentDto = restTemplate.getForObject("/api/v1/students/{studentId}", 
+                                                        StudentDto.class, studentId);
+        if (studentDto == null) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+        
+        newRating.setUserName(studentDto.getUserName());
+        Rating savedRating = this.ratingService.saveRating(newRating);
+        Double mean = this.ratingService.ratingMean(courseId);
 
-		String studentServiceUrl = "/api/v1/students/{studentId}";
-		RestTemplate restTemplate = new RestTemplate();
+        return new ResponseEntity<>(savedRating, HttpStatus.CREATED);
+    }
 
-		try {
-			StudentDto studentDto = restTemplate.getForObject(studentServiceUrl, StudentDto.class, studentId);
-			if (studentDto != null) {
-				newRating.setUserName(studentDto.getUserName());
-			} else {
-				return new ResponseEntity<>(HttpStatus.NOT_FOUND); 
-			}
-		} catch (Exception e) {
-			return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE); 
-		}
-
-		Rating savedRating = this.ratingService.saveRating(newRating);
-		Double mean = this.ratingService.ratingMean(courseId);
-
-		return new ResponseEntity<>(savedRating, HttpStatus.CREATED);
-	}
-
-	public ResponseEntity<String> controllerFallback(Throwable throwable) {
+    public ResponseEntity<String> controllerFallback(String courseId, String studentId, 
+                                                   Rating rating, Throwable throwable) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                             .body("Fallback Circuit Breaker Activo: " + throwable.getMessage());
+                           .body("Fallback Circuit Breaker Activo: " + throwable.getMessage());
     }
 
 

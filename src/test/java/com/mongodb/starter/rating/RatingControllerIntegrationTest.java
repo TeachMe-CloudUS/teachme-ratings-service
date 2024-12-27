@@ -4,11 +4,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.*;
-import static org.mockito.Mockito.verify;
 /*import static org.mockito.Mockito.mock;*/
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,14 +23,25 @@ import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.starter.student.StudentDto;
+
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+
 import org.springframework.boot.test.mock.mockito.MockBean;
+
+import org.springframework.web.client.ResourceAccessException;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.awaitility.Awaitility.await;
 
 
 @SpringBootTest(properties = {
-    "resilience4j.circuitbreaker.instances.circuit_active.registerHealthIndicator=false",
-    "resilience4j.circuitbreaker.instances.circuit_active.slidingWindowSize=10",
-    "resilience4j.circuitbreaker.instances.circuit_active.minimumNumberOfCalls=5",
-    "resilience4j.circuitbreaker.instances.circuit_active.failureRateThreshold=100"
+    "resilience4j.circuitbreaker.instances.createRating.registerHealthIndicator=true",
+    "resilience4j.circuitbreaker.instances.createRating.slidingWindowSize=10",
+    "resilience4j.circuitbreaker.instances.createRating.minimumNumberOfCalls=5",
+    "resilience4j.circuitbreaker.instances.createRating.failureRateThreshold=50",
+    "resilience4j.circuitbreaker.instances.createRating.waitDurationInOpenState=5s",
+    "resilience4j.circuitbreaker.instances.createRating.permittedNumberOfCallsInHalfOpenState=3"
 })
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
@@ -47,14 +59,16 @@ class RatingControllerIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
+
     @BeforeEach
     void setUp() {
         ratingRepository.deleteAll();
     }
 
-    /*
     @Test
-    void createRating() throws Exception {
+    void createRatingWithCircuitBreaker() throws Exception {
         Rating rating = new Rating();
         rating.setDescription("description");
         rating.setRating(4);
@@ -62,25 +76,86 @@ class RatingControllerIntegrationTest {
         StudentDto mockStudent = new StudentDto();
         mockStudent.setUserName("userName1");
 
+        // Configuramos el comportamiento exitoso inicial
         when(restTemplate.getForObject("/api/v1/students/{studentId}", 
-                               StudentDto.class, "testUser"))
-        .thenReturn(mockStudent);
+                                    StudentDto.class, "testUser"))
+                .thenReturn(mockStudent);
 
+        // Primera llamada exitosa
         mockMvc.perform(post("/api/v1/course/course1/ratings/")
                 .param("studentId", "testUser")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(rating)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").isNotEmpty())
-                .andExpect(jsonPath("$.description").value("description"))
-                .andExpect(jsonPath("$.rating").value(4))
-                .andExpect(jsonPath("$.courseId").value("course1"))
                 .andExpect(jsonPath("$.userName").value("userName1"));
 
-        verify(restTemplate).getForObject("/api/v1/students/{studentId}", 
-                                        StudentDto.class, "testUser");
+        // Cambiamos el comportamiento para simular fallos
+        when(restTemplate.getForObject("/api/v1/students/{studentId}", 
+                                    StudentDto.class, "testUser"))
+                .thenThrow(new RuntimeException("Service Unavailable"));
+
+        // Realizamos llamadas para activar el circuit breaker
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/v1/course/course1/ratings/")
+                    .param("studentId", "testUser")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(rating)))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(content().string(containsString("Fallback Circuit Breaker Activo")));
+            
+            // Añadimos una pequeña pausa entre llamadas
+            Thread.sleep(100);
+        }
     }
-    */
+
+    @Test
+    void testCircuitBreakerRecovery() throws Exception {
+        CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker("createRating");
+
+        Rating rating = new Rating();
+        rating.setDescription("description");
+        rating.setRating(4);
+
+        when(restTemplate.getForObject(anyString(), eq(StudentDto.class), anyString()))
+            .thenThrow(new ResourceAccessException("Service Unavailable"));
+
+        // Simula llamadas fallidas
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/v1/course/course1/ratings/")
+                    .param("studentId", "testUser")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(rating)))
+                    .andExpect(status().isServiceUnavailable());
+        }
+
+        // Verifica que el Circuit Breaker esté abierto
+        assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
+
+        // Configura una respuesta exitosa
+        StudentDto mockStudent = new StudentDto();
+        mockStudent.setUserName("userName1");
+        when(restTemplate.getForObject(eq("/api/v1/students/{studentId}"), 
+                                        eq(StudentDto.class), 
+                                        eq("testUser")))
+            .thenReturn(mockStudent);
+
+        // Espera el estado HALF-OPEN y realiza llamadas exitosas
+        await().atMost(7, TimeUnit.SECONDS)
+                .until(() -> circuitBreaker.getState() == CircuitBreaker.State.HALF_OPEN);
+
+        for (int i = 0; i < 3; i++) {
+            mockMvc.perform(post("/api/v1/course/course1/ratings/")
+                    .param("studentId", "testUser")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(rating)))
+                    .andExpect(status().isCreated());
+        }
+
+        // Verifica que el Circuit Breaker esté cerrado
+        await().atMost(5, TimeUnit.SECONDS)
+                .until(() -> circuitBreaker.getState() == CircuitBreaker.State.CLOSED);
+    }
+
 
 
     @Test
