@@ -12,11 +12,17 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestTemplate;
+
+import com.mongodb.starter.student.StudentDto;
 import com.mongodb.starter.util.MessageResponse;
 import com.mongodb.starter.util.RestPreconditions;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -26,32 +32,56 @@ import jakarta.validation.Valid;
 public class RatingController {
     
     private final RatingService ratingService;
-
+    private final RestTemplate restTemplate;
+    private final RatingConfig ratingConfig;
+    
     @Autowired
-	public RatingController(RatingService ratingService) {
-		this.ratingService = ratingService;
-	}
+    public RatingController(RatingService ratingService, RestTemplate restTemplate, RatingConfig ratingConfig) {
+        this.ratingService = ratingService;
+        this.restTemplate = restTemplate;
+        this.ratingConfig = ratingConfig;
+    }
 
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @CircuitBreaker(name = "createRating", fallbackMethod = "controllerFallback")
+    public ResponseEntity<Rating> create(@PathVariable("courseId") String courseId, 
+                                       @RequestParam("studentId") String studentId, 
+                                       @RequestBody @Valid Rating rating) {
+        if (!ratingConfig.isEnabled()) {
+            return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE);
+        }
 
-    //CREATE	
+        Rating newRating = new Rating();
+        BeanUtils.copyProperties(rating, newRating, "id");
+        newRating.setCourseId(courseId);
+        newRating.setUserId(studentId); // Añadido para evitar userId null
 
-	@PostMapping
-	@ResponseStatus(HttpStatus.CREATED)
-	public ResponseEntity<Rating> create(@PathVariable("courseId") String courseId,@RequestBody @Valid Rating rating){
-		//TODO: petición a microservicio user para obtener el usuario loggeado
-		Rating newRating = new Rating();
-		Rating savedRating;
-		BeanUtils.copyProperties(rating, newRating, "id");
-		newRating.setCourseId(courseId);
-		savedRating = this.ratingService.saveRating(newRating);
-		Double mean = this.ratingService.ratingMean(courseId);
-		//TODO: petición asíncrona a microservicio course para actualizar rating
-		return new ResponseEntity<>(savedRating, HttpStatus.OK);
-	}
+        try {
+            StudentDto studentDto = restTemplate.getForObject("/api/v1/students/{studentId}", 
+                                                            StudentDto.class, studentId);
+            if (studentDto == null) {
+                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            }
+            
+            newRating.setUsername(studentDto.getUsername());
+            Rating savedRating = this.ratingService.saveRating(newRating);
+            Double mean = this.ratingService.ratingMean(courseId);
+            
+            return new ResponseEntity<>(savedRating, HttpStatus.CREATED);
+        } catch (Exception e) {
+            throw new ResourceAccessException("Service Unavailable");
+        }
+    }
+
+    public ResponseEntity<String> controllerFallback(String courseId, String studentId, 
+                                                   Rating rating, Throwable throwable) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                           .body("Fallback Circuit Breaker Activo: " + throwable.getMessage());
+    }
 
 
     //DELETE	
-
 	@DeleteMapping("{ratingId}")
 	@ResponseStatus(HttpStatus.OK)
 	public ResponseEntity<MessageResponse> delete(@PathVariable("courseId") String courseId, @PathVariable("ratingId") String ratingId) {
