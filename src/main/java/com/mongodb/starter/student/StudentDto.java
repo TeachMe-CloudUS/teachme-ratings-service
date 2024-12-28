@@ -5,12 +5,12 @@ import lombok.Data;
 @Data
 public class StudentDto {
     private String id; 
-    private String userName; 
+    private String username; 
 
     public StudentDto() {}
 
-    public StudentDto(String id, String userName) {
+    public StudentDto(String id, String username) {
         this.id = id;
-        this.userName = userName;
+        this.username = username;
     }
 }

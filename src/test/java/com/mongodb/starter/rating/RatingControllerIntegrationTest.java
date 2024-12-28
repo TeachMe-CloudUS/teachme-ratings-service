@@ -90,7 +90,7 @@ class RatingControllerIntegrationTest {
         rating.setUserId("testUser"); // Añadido para evitar userId null
 
         StudentDto mockStudent = new StudentDto();
-        mockStudent.setUserName("userName1");
+        mockStudent.setUsername("username1");
 
         when(restTemplate.getForObject(
             eq("/api/v1/students/{studentId}"),
@@ -111,7 +111,7 @@ class RatingControllerIntegrationTest {
             result.getResponse().getContentAsString(), 
             Rating.class
         );
-        assertThat(createdRating.getUserName()).isEqualTo("userName1");
+        assertThat(createdRating.getUsername()).isEqualTo("username1");
 
         // Configurar mock para fallos
         when(restTemplate.getForObject(
@@ -140,7 +140,7 @@ class RatingControllerIntegrationTest {
         rating.setRating(4);
 
         StudentDto mockStudent = new StudentDto();
-        mockStudent.setUserName("userName1");
+        mockStudent.setUsername("username1");
 
         // Configurar fallos iniciales
         when(restTemplate.getForObject(

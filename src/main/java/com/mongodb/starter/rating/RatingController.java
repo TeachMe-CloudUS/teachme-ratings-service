@@ -64,7 +64,7 @@ public class RatingController {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
             
-            newRating.setUserName(studentDto.getUserName());
+            newRating.setUsername(studentDto.getUsername());
             Rating savedRating = this.ratingService.saveRating(newRating);
             Double mean = this.ratingService.ratingMean(courseId);
             
