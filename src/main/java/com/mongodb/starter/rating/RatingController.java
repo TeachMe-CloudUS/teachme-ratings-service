@@ -33,35 +33,45 @@ public class RatingController {
     
     private final RatingService ratingService;
     private final RestTemplate restTemplate;
+    private final RatingConfig ratingConfig;
     
     @Autowired
-    public RatingController(RatingService ratingService, RestTemplate restTemplate) {
+    public RatingController(RatingService ratingService, RestTemplate restTemplate, RatingConfig ratingConfig) {
         this.ratingService = ratingService;
         this.restTemplate = restTemplate;
+        this.ratingConfig = ratingConfig;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-	@CircuitBreaker(name = "createRating", fallbackMethod = "controllerFallback")
+    @CircuitBreaker(name = "createRating", fallbackMethod = "controllerFallback")
     public ResponseEntity<Rating> create(@PathVariable("courseId") String courseId, 
                                        @RequestParam("studentId") String studentId, 
                                        @RequestBody @Valid Rating rating) {
+        if (!ratingConfig.isEnabled()) {
+            return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE);
+        }
+
         Rating newRating = new Rating();
         BeanUtils.copyProperties(rating, newRating, "id");
         newRating.setCourseId(courseId);
+        newRating.setUserId(studentId); // Añadido para evitar userId null
 
-        // Eliminamos el try-catch para permitir que el Circuit Breaker maneje las excepciones
-        StudentDto studentDto = restTemplate.getForObject("/api/v1/students/{studentId}", 
-                                                        StudentDto.class, studentId);
-        if (studentDto == null) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        try {
+            StudentDto studentDto = restTemplate.getForObject("/api/v1/students/{studentId}", 
+                                                            StudentDto.class, studentId);
+            if (studentDto == null) {
+                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            }
+            
+            newRating.setUserName(studentDto.getUserName());
+            Rating savedRating = this.ratingService.saveRating(newRating);
+            Double mean = this.ratingService.ratingMean(courseId);
+            
+            return new ResponseEntity<>(savedRating, HttpStatus.CREATED);
+        } catch (Exception e) {
+            throw new ResourceAccessException("Service Unavailable");
         }
-        
-        newRating.setUserName(studentDto.getUserName());
-        Rating savedRating = this.ratingService.saveRating(newRating);
-        Double mean = this.ratingService.ratingMean(courseId);
-
-        return new ResponseEntity<>(savedRating, HttpStatus.CREATED);
     }
 
     public ResponseEntity<String> controllerFallback(String courseId, String studentId, 

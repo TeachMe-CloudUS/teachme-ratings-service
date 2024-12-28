@@ -10,11 +10,13 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import com.mongodb.starter.exceptions.ResourceNotFoundException;
 
 @SpringBootTest
+@AutoConfigureTestDatabase
 class RatingServiceIntegrationTest {
 
     @Autowired
@@ -22,6 +24,9 @@ class RatingServiceIntegrationTest {
 
     @Autowired
     private RatingRepository ratingRepository;
+
+    @Autowired 
+    private RatingConfig ratingConfig;
 
     @BeforeEach
     void setUp() {
@@ -210,6 +215,23 @@ class RatingServiceIntegrationTest {
     }
 
     */
+
+    @Test
+    void shouldRespectFeatureToggleWhenSaving() {
+        boolean originalState = ratingConfig.isEnabled();
+        try {
+            // Deshabilitamos el feature para esta prueba
+            ratingConfig.setEnabled(false);
+            
+            Rating rating = createTestRating("course1");
+            
+            assertThrows(RatingService.FeatureDisabledException.class, () -> {
+                ratingService.saveRating(rating);
+            });
+        } finally {
+            ratingConfig.setEnabled(originalState);
+        }
+    }
     
 }
 
