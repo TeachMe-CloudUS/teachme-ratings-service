@@ -62,11 +62,12 @@ public class RatingControllerUnitaryTest {
     @Test
     public void testCreateRating() throws Exception {
     String courseId = "course1";
+    String studentId = "student1";
     Rating newRating = constructorRating(null, "Great course!", 5, "user1", courseId);
     Rating savedRating = constructorRating("rating1", "Great course!", 5, "user1", courseId);
 
     when(ratingService.saveRating(any(Rating.class))).thenReturn(savedRating);
-    ResponseEntity<Rating> response = ratingController.create(courseId, newRating);
+    ResponseEntity<Rating> response = ratingController.create(courseId, studentId, newRating);
     assertEquals(HttpStatus.OK, response.getStatusCode());
     Rating returnedRating = response.getBody();
     assertNotNull(returnedRating);
