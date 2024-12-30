@@ -15,45 +15,74 @@ import org.springframework.stereotype.Service;
 public class RatingService {
     
     private RatingRepository ratingRepository;
+    private final RatingConfig ratingConfig;
+    private final RatingThrottler ratingThrottler;
 
     @Autowired
-    public RatingService(RatingRepository ratingRepository) {
-		this.ratingRepository = ratingRepository;
-	}
+    public RatingService(RatingRepository ratingRepository, RatingConfig ratingConfig, RatingThrottler ratingThrottler) {
+        this.ratingRepository = ratingRepository;
+        this.ratingConfig = ratingConfig;
+        this.ratingThrottler = ratingThrottler;
+    }
 
     @Transactional(readOnly = true)
-	public Collection<Rating> findAll() {
-		return (List<Rating>) ratingRepository.findAll();
-	}
+    public Collection<Rating> findAll() {
+        return (List<Rating>) ratingRepository.findAll();
+    }
 
     @Transactional(readOnly = true)
-	public Rating findRatingById(String id) throws DataAccessException {
-		return ratingRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Rating", "ID", id));
-	}
+    public Rating findRatingById(String id) throws DataAccessException {
+        return ratingRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Rating", "ID", id));
+    }
 
-	@Transactional(readOnly = true)
-	public List<Rating> findAllRatingsByCourse(String courseId) throws DataAccessException {
-		return ratingRepository.findAllRatingsByCourse(courseId);
-	}
-
-    @Transactional
-	public Rating saveRating(Rating rating){
-        ratingRepository.save(rating);
-		return rating;
-	}
+    @Transactional(readOnly = true)
+    public List<Rating> findAllRatingsByCourse(String courseId) throws DataAccessException {
+        return ratingRepository.findAllRatingsByCourse(courseId);
+    }
 
     @Transactional
-	public Rating updateRating(Rating rating, String id) {
-		Rating toUpdate = findRatingById(id);
-		BeanUtils.copyProperties(rating, toUpdate, "id");
-		return saveRating(toUpdate);
-	}
+    public Rating saveRating(Rating rating) {
+        if (!ratingConfig.isEnabled()) {
+            throw new FeatureDisabledException("Rating feature is currently disabled");
+        }
 
-	@Transactional
-	public void deleteRating(String id) throws DataAccessException {
-		Rating toDelete = findRatingById(id);
-		ratingRepository.delete(toDelete);
-	}
+        if (!ratingThrottler.allowRequest(rating.getUserId())) {
+            throw new ThrottlingException("Rate limit exceeded for user: " + rating.getUserId());
+        }
+
+        return ratingRepository.save(rating);
+    }
+
+    @Transactional
+    public Rating updateRating(Rating rating, String id) {
+        if (!ratingConfig.isEnabled()) {
+            throw new FeatureDisabledException("Rating feature is currently disabled");
+        }
+
+        Rating toUpdate = findRatingById(id);
+
+        if (!ratingThrottler.allowRequest(rating.getUserId())) {
+            throw new ThrottlingException("Rate limit exceeded for user: " + rating.getUserId());
+        }
+
+        BeanUtils.copyProperties(rating, toUpdate, "id");
+        return ratingRepository.save(toUpdate);
+    }
+
+    @Transactional
+    public void deleteRating(String id) throws DataAccessException {
+        if (!ratingConfig.isEnabled()) {
+            throw new FeatureDisabledException("Rating feature is currently disabled");
+        }
+        
+        Rating toDelete = findRatingById(id);
+        
+        if (!ratingThrottler.allowRequest(toDelete.getUserId())) {
+            throw new ThrottlingException("Rate limit exceeded for user: " + toDelete.getUserId());
+        }
+        
+        ratingRepository.delete(toDelete);
+    }
 
 	@Transactional(readOnly =true)
 	public Double ratingMean(String courseId){
@@ -61,4 +90,20 @@ public class RatingService {
 		Double mean = ratings.stream().mapToDouble(Integer:: doubleValue).average().orElse(0.0);
 		return mean;
 	}
+
+	// Excepción para feature toggle
+	public class FeatureDisabledException extends RuntimeException {
+		public FeatureDisabledException(String message) {
+			super(message);
+		}
+	}
+
+	// Excepción para throttling
+	public class ThrottlingException extends RuntimeException {
+		public ThrottlingException(String message) {
+			super(message);
+		}
+	}
 }
+
+
