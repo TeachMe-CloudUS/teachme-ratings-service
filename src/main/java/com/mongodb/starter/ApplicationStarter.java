@@ -14,13 +14,13 @@ public class ApplicationStarter {
     }
 }
 
-@RestController
-class HelloController {
+// @RestController
+// class HelloController {
 
-    @GetMapping("/hola")
-    public String getName() {
-        return "TeachMe actúa como plataforma de enseñanza mediante cursos para estudiantes interesados. Los usuarios son personas que buscan realizar cursos, dichos cursos pueden ser cerficados profesionales que promuevan la inserción laboral.\r\n" + //
-                        "\r\n" + //
-                        "Microservicio de Valoraciones";
-    }
-}
+//     @GetMapping("/hola")
+//     public String getName() {
+//         return "TeachMe actúa como plataforma de enseñanza mediante cursos para estudiantes interesados. Los usuarios son personas que buscan realizar cursos, dichos cursos pueden ser cerficados profesionales que promuevan la inserción laboral.\r\n" + //
+//                         "\r\n" + //
+//                         "Microservicio de Valoraciones";
+//     }
+// }

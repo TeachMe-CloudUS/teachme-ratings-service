@@ -28,7 +28,9 @@ public class Rating {
     @Max(5)
     Integer rating;
     String userId;
+    String username;
     String courseId;
+    String username;
     LocalDateTime date = LocalDateTime.now();
 
     @Id
