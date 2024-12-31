@@ -215,6 +215,7 @@ class RatingControllerIntegrationTest {
         rating.setRating(4);
         rating.setUserId("testUser");
         rating.setCourseId(course);
+        rating.setUsername("user");
         return rating;
     }
 
@@ -227,12 +228,14 @@ class RatingControllerIntegrationTest {
         updatedRating1.setRating(5);
         updatedRating1.setUserId("user1");
         updatedRating1.setCourseId("course1");
+        updatedRating1.setUsername("user1");
 
         Rating updatedRating2 = new Rating();
         updatedRating2.setDescription("Updated 2");
         updatedRating2.setRating(3);
         updatedRating2.setUserId("user2");
         updatedRating2.setCourseId("course1");
+        updatedRating2.setUsername("user1");
 
         mockMvc.perform(put("/api/v1/course/course1/ratings/{ratingId}", rating.getId())
                 .contentType(MediaType.APPLICATION_JSON)

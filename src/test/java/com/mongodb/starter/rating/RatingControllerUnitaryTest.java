@@ -2,6 +2,7 @@ package com.mongodb.starter.rating;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
@@ -23,8 +24,12 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.Errors;
+import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mongodb.starter.exceptions.ValidationException;
+import com.mongodb.starter.student.StudentDto;
 import com.mongodb.starter.util.MessageResponse;
 
 @SpringBootTest
@@ -40,13 +45,40 @@ public class RatingControllerUnitaryTest {
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private RatingValidator ratingValidator;
     
+    @Mock
+    private RatingConfig ratingConfig;
+
+    @Mock
+    private RestTemplate restTemplate;
+
+    @Mock
+    private Errors errors; 
+
+    private Rating invalidRating;
+
+    private StudentDto studentDto;
+
+
     @BeforeEach
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        invalidRating = new Rating();
+        invalidRating.setDescription(""); // Invalid description
+        invalidRating.setRating(6); // Invalid rating
+        invalidRating.setUserId(""); // Invalid userId
+        invalidRating.setUsername(""); // Invalid username
+        invalidRating.setCourseId(""); // Invalid courseId
+
+        studentDto = new StudentDto();
+        studentDto.setId("user1");
+        studentDto.setUsername("user");
     }
 
-    private Rating constructorRating(String id, String description, Integer rating_value, String userId, String courseId){
+    private Rating constructorRating(String id, String description, Integer rating_value, String userId, String courseId, String username){
         Rating rating = new Rating();
         rating.setId(id);
         rating.setDescription(description);
@@ -54,6 +86,7 @@ public class RatingControllerUnitaryTest {
         rating.setUserId(userId);
         rating.setCourseId(courseId);
         rating.setDate(LocalDateTime.now());
+        rating.setUsername(username);
 
         return rating; 
     }
@@ -63,9 +96,11 @@ public class RatingControllerUnitaryTest {
     public void testCreateRating() throws Exception {
     String courseId = "course1";
     String studentId = "student1";
-    Rating newRating = constructorRating(null, "Great course!", 5, "user1", courseId);
-    Rating savedRating = constructorRating("rating1", "Great course!", 5, "user1", courseId);
+    Rating newRating = constructorRating(null, "Great course!", 5, "user1", courseId, "user");
+    Rating savedRating = constructorRating("rating1", "Great course!", 5, "user1", courseId, "user");
 
+    when(ratingConfig.isEnabled()).thenReturn(true);
+    when(restTemplate.getForObject("/api/v1/students/{studentId}", StudentDto.class, studentId)).thenReturn(studentDto);
     when(ratingService.saveRating(any(Rating.class))).thenReturn(savedRating);
     ResponseEntity<Rating> response = ratingController.create(courseId, studentId, newRating);
     assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -83,7 +118,7 @@ public class RatingControllerUnitaryTest {
         String ratingId = "rate1";
 
         // Mock behavior
-        Rating existingRating = constructorRating(ratingId, "Great course!", 5, "user1", courseId);
+        Rating existingRating = constructorRating(ratingId, "Great course!", 5, "user1", courseId, "user");
 
         when(ratingService.findRatingById(ratingId)).thenReturn(existingRating);
 
@@ -105,6 +140,7 @@ public class RatingControllerUnitaryTest {
 
         when(ratingService.findRatingById(ratingId)).thenReturn(existingRating);
         when(ratingService.updateRating(any(Rating.class), eq(ratingId))).thenReturn(updatedRating);
+
 
         ResponseEntity<Rating> response = ratingController.update(courseId, ratingId, updatedRating);
 
@@ -140,8 +176,86 @@ public class RatingControllerUnitaryTest {
         List<Rating> result = response.getBody();
         assertNotNull(result);
         assertEquals(1, result.size());
+    }
 
+    @Test
+    public void testCreateRatingValidationFailsDescriptionEmpty() {
+        when(ratingConfig.isEnabled()).thenReturn(true);
+        when(ratingValidator.validateObject(invalidRating)).thenReturn(errors);
+        when(errors.hasErrors()).thenReturn(true);
+        when(errors.getFieldErrors()).thenReturn(java.util.Collections.singletonList(
+                new org.springframework.validation.FieldError("description", "description", "required and between 1 and 500 characters")
+        ));
 
+        ValidationException thrown = assertThrows(ValidationException.class, () -> {
+            ratingController.create("course123", "student123", invalidRating);
+        });
+
+        assertEquals("description: required and between 1 and 500 characters\n", thrown.getMessage());
+    }
+
+    @Test
+    public void testCreateRatingValidationFailsRatingOutOfBounds() {
+        when(ratingConfig.isEnabled()).thenReturn(true);
+        when(ratingValidator.validateObject(invalidRating)).thenReturn(errors);
+        when(errors.hasErrors()).thenReturn(true);
+        when(errors.getFieldErrors()).thenReturn(java.util.Collections.singletonList(
+                new org.springframework.validation.FieldError("rating", "rating", "required and between 1 and 5")
+        ));
+
+        ValidationException thrown = assertThrows(ValidationException.class, () -> {
+            ratingController.create("course123", "student123", invalidRating);
+        });
+
+        assertEquals("rating: required and between 1 and 5\n", thrown.getMessage());
+    }
+
+    @Test
+    public void testCreateRatingValidationFailsUserIdEmpty() {
+        when(ratingConfig.isEnabled()).thenReturn(true);
+        when(ratingValidator.validateObject(invalidRating)).thenReturn(errors);
+        when(errors.hasErrors()).thenReturn(true);
+        when(errors.getFieldErrors()).thenReturn(java.util.Collections.singletonList(
+                new org.springframework.validation.FieldError("userId", "userId", "required")
+        ));
+
+        ValidationException thrown = assertThrows(ValidationException.class, () -> {
+            ratingController.create("course123", "student123", invalidRating);
+        });
+
+        assertEquals("userId: required\n", thrown.getMessage());
+    }
+
+    @Test
+    public void testCreateRatingValidationFailsUsernameEmpty() {
+        when(ratingConfig.isEnabled()).thenReturn(true);
+        when(ratingValidator.validateObject(invalidRating)).thenReturn(errors);
+        when(errors.hasErrors()).thenReturn(true);
+        when(errors.getFieldErrors()).thenReturn(java.util.Collections.singletonList(
+                new org.springframework.validation.FieldError("username", "username", "required")
+        ));
+
+        ValidationException thrown = assertThrows(ValidationException.class, () -> {
+            ratingController.create("course123", "student123", invalidRating);
+        });
+
+        assertEquals("username: required\n", thrown.getMessage());
+    }
+
+    @Test
+    public void testCreateRatingValidationFailsCourseIdEmpty() {
+        when(ratingConfig.isEnabled()).thenReturn(true);
+        when(ratingValidator.validateObject(invalidRating)).thenReturn(errors);
+        when(errors.hasErrors()).thenReturn(true);
+        when(errors.getFieldErrors()).thenReturn(java.util.Collections.singletonList(
+                new org.springframework.validation.FieldError("courseId", "courseId", "required")
+        ));
+
+        ValidationException thrown = assertThrows(ValidationException.class, () -> {
+            ratingController.create("course123", "student123", invalidRating);
+        });
+
+        assertEquals("courseId: required\n", thrown.getMessage());
     }
 
 

@@ -5,8 +5,11 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.Errors;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import com.mongodb.starter.exceptions.ValidationException;
 import com.mongodb.starter.student.StudentDto;
 import com.mongodb.starter.util.MessageResponse;
 import com.mongodb.starter.util.RestPreconditions;
@@ -34,14 +38,18 @@ public class RatingController {
     private final RatingService ratingService;
     private final RestTemplate restTemplate;
     private final RatingConfig ratingConfig;
+    private final RatingValidator ratingValidator;
+
     
     @Autowired
-    public RatingController(RatingService ratingService, RestTemplate restTemplate, RatingConfig ratingConfig) {
+    public RatingController(RatingService ratingService, RestTemplate restTemplate, RatingConfig ratingConfig, RatingValidator ratingValidator) {
         this.ratingService = ratingService;
         this.restTemplate = restTemplate;
         this.ratingConfig = ratingConfig;
+        this.ratingValidator = ratingValidator;
     }
 
+    //CREATE
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @CircuitBreaker(name = "createRating", fallbackMethod = "controllerFallback")
@@ -57,14 +65,26 @@ public class RatingController {
         newRating.setCourseId(courseId);
         newRating.setUserId(studentId); // Añadido para evitar userId null
 
-        try {
-            StudentDto studentDto = restTemplate.getForObject("/api/v1/students/{studentId}", 
-                                                            StudentDto.class, studentId);
-            if (studentDto == null) {
-                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-            }
+        // try {
+        //     StudentDto studentDto = restTemplate.getForObject("/api/v1/students/{studentId}", 
+        //                                                     StudentDto.class, studentId);
+        //     if (studentDto == null) {
+        //         return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        //     }
             
             newRating.setUsername(studentDto.getUsername());
+            Errors errors = ratingValidator.validateObject(newRating);
+            if(errors.hasErrors()) {
+                StringBuilder errorMessage = new StringBuilder();
+                for (org.springframework.validation.FieldError error : errors.getFieldErrors()) {
+                    errorMessage.append(error.getField())
+                                .append(": ")
+                                .append(error.getDefaultMessage())
+                                .append("\n");
+                }
+                throw new ValidationException(errorMessage.toString());
+            }
+            
             Rating savedRating = this.ratingService.saveRating(newRating);
             Double mean = this.ratingService.ratingMean(courseId);
             
@@ -104,6 +124,17 @@ public class RatingController {
 		// User loggedUser = userService.findUser(id);
 		// 	User paperUser = aux.getUser();
 		// 	if (loggedUser.getId().equals(paperUser.getId())) {
+        Errors errors = ratingValidator.validateObject(aux);
+        if(errors.hasErrors()) {
+            StringBuilder errorMessage = new StringBuilder();
+            for (org.springframework.validation.FieldError error : errors.getFieldErrors()) {
+                errorMessage.append(error.getField())
+                            .append(": ")
+                            .append(error.getDefaultMessage())
+                            .append("\n");
+            }
+            throw new ValidationException(errorMessage.toString());
+        }
 		Rating res = ratingService.updateRating(rating, ratingId);
 		Double mean = this.ratingService.ratingMean(courseId);
 		//TODO: petición asíncrona a microservicio course para actualizar rating
