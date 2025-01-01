@@ -41,7 +41,7 @@ public class RatingValidator implements Validator{
 		}
 
 		// rating validation
-		if (rating_number>5 || rating_number<0) {
+		if (rating_number>5 || rating_number<=0) {
 			errors.rejectValue("rating", REQUIRED+" and between 1 and 5");
 		}
 	}
