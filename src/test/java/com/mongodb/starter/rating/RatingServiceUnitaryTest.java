@@ -1,6 +1,7 @@
 package com.mongodb.starter.rating;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -14,16 +15,28 @@ import java.util.Optional;
 import org.junit.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.context.SpringBootTest;
 
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest
+@AutoConfigureTestDatabase
+@RunWith(MockitoJUnitRunner.class)
 public class RatingServiceUnitaryTest{
 
     @Mock
     private RatingRepository ratingRepository;
+
+    @Mock
+    private RatingConfig ratingConfig;
+
+    @Mock
+    private RatingThrottler ratingThrottler;
 
     @InjectMocks
     private RatingService ratingService;
@@ -82,6 +95,8 @@ public class RatingServiceUnitaryTest{
         Rating rating1 = constructorRating("rate1","No me ha gustado nada",1,"user1","course1");
 
         when(ratingRepository.save(rating1)).thenReturn(rating1);
+        when(ratingConfig.isEnabled()).thenReturn(true);
+        when(ratingThrottler.allowRequest(any())).thenReturn(true);
 
         Rating result = ratingService.saveRating(rating1);
 
@@ -95,6 +110,8 @@ public class RatingServiceUnitaryTest{
         Rating updatedRating = constructorRating("rate1", "Bueno, tampoco estaba tan mal", 2, "user1", "course1");
         when(ratingRepository.findById("rate1")).thenReturn(Optional.of(existingRating));
         when(ratingRepository.save(existingRating)).thenReturn(updatedRating);
+        when(ratingConfig.isEnabled()).thenReturn(true);
+        when(ratingThrottler.allowRequest(any())).thenReturn(true);
 
         Rating result = ratingService.updateRating(updatedRating,"rate1");
 
@@ -115,6 +132,9 @@ public class RatingServiceUnitaryTest{
         existingRating.setId(ratingId);
 
         when(ratingRepository.findById(ratingId)).thenReturn(Optional.of(existingRating));
+        when(ratingConfig.isEnabled()).thenReturn(true);
+        when(ratingThrottler.allowRequest(any())).thenReturn(true);
+        
         doNothing().when(ratingRepository).delete(existingRating);
 
         ratingService.deleteRating(ratingId);

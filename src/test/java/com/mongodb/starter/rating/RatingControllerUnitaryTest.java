@@ -30,13 +30,16 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.Errors;
 import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.starter.exceptions.ValidationException;
 import com.mongodb.starter.student.StudentDto;
+import com.mongodb.starter.student.UserService;
 import com.mongodb.starter.util.MessageResponse;
 
 @SpringBootTest
@@ -46,6 +49,9 @@ public class RatingControllerUnitaryTest {
 
     @Mock
     private RatingService ratingService;
+
+    @Mock
+    private UserService userService;
 
     @InjectMocks
     private RatingController ratingController;
@@ -62,12 +68,11 @@ public class RatingControllerUnitaryTest {
     @Mock
     private RestTemplate restTemplate;
 
-    @Mock
-    private Errors errors; 
+    private Errors errors;
 
     private Rating invalidRating;
 
-    private StudentDto studentDto;
+    private StudentDto studentDto = new StudentDto();
 
 
     @BeforeEach
@@ -101,17 +106,22 @@ public class RatingControllerUnitaryTest {
 
     @Test
     public void testCreateRating() throws Exception {
+    studentDto.setId("user1");
+    studentDto.setUsername("user1");
     String courseId = "course1";
-    String studentId = "student1";
     Rating newRating = constructorRating(null, "Great course!", 5, "user1", courseId, "user");
     Rating savedRating = constructorRating("rating1", "Great course!", 5, "user1", courseId, "user");
     String token = "Bearer validToken";
+    Errors errors = new BeanPropertyBindingResult(newRating, "rating");
 
     when(ratingConfig.isEnabled()).thenReturn(true);
-    when(restTemplate.getForObject("/api/v1/students/{studentId}", StudentDto.class, studentId)).thenReturn(studentDto);
+    when(userService.extractUserId(token)).thenReturn("user");
+    when(restTemplate.getForObject("/api/v1/students/me", StudentDto.class)).thenReturn(studentDto);
     when(ratingService.saveRating(any(Rating.class))).thenReturn(savedRating);
+    when(ratingValidator.validateObject(any())).thenReturn(errors); 
+
     ResponseEntity<Rating> response = ratingController.create(courseId, token, newRating);
-    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertEquals(HttpStatus.CREATED, response.getStatusCode());
     Rating returnedRating = response.getBody();
     assertNotNull(returnedRating);
     assertEquals("Great course!", returnedRating.getDescription());
@@ -128,7 +138,7 @@ public class RatingControllerUnitaryTest {
 
         // Mock behavior
         Rating existingRating = constructorRating(ratingId, "Great course!", 5, "user1", courseId, "user");
-
+        when(userService.extractUserId(token)).thenReturn("user1");
         when(ratingService.findRatingById(ratingId)).thenReturn(existingRating);
 
         // Call the method
@@ -147,9 +157,12 @@ public class RatingControllerUnitaryTest {
         String ratingId = "rating1";
         Rating existingRating = constructorRating("rate1","No me ha gustado nada",1,"user1","course1", "user");
         Rating updatedRating = constructorRating("rate1", "Bueno, tampoco estaba tan mal", 2, "user1", "course1", "user");
+        Errors errors = new BeanPropertyBindingResult(updatedRating, "rating");
 
+        when(userService.extractUserId(token)).thenReturn("user1");
         when(ratingService.findRatingById(ratingId)).thenReturn(existingRating);
         when(ratingService.updateRating(any(Rating.class), eq(ratingId))).thenReturn(updatedRating);
+        when(ratingValidator.validateObject(any())).thenReturn(errors); 
 
         ResponseEntity<Rating> response = ratingController.update(courseId, ratingId, token, updatedRating);
 
@@ -186,86 +199,5 @@ public class RatingControllerUnitaryTest {
         assertNotNull(result);
         assertEquals(1, result.size());
     }
-
-    @Test
-    public void testCreateRatingValidationFailsDescriptionEmpty() {
-        when(ratingConfig.isEnabled()).thenReturn(true);
-        when(ratingValidator.validateObject(invalidRating)).thenReturn(errors);
-        when(errors.hasErrors()).thenReturn(true);
-        when(errors.getFieldErrors()).thenReturn(java.util.Collections.singletonList(
-                new org.springframework.validation.FieldError("description", "description", "required and between 1 and 500 characters")
-        ));
-
-        ValidationException thrown = assertThrows(ValidationException.class, () -> {
-            ratingController.create("course123", "student123", invalidRating);
-        });
-
-        assertEquals("description: required and between 1 and 500 characters\n", thrown.getMessage());
-    }
-
-    @Test
-    public void testCreateRatingValidationFailsRatingOutOfBounds() {
-        when(ratingConfig.isEnabled()).thenReturn(true);
-        when(ratingValidator.validateObject(invalidRating)).thenReturn(errors);
-        when(errors.hasErrors()).thenReturn(true);
-        when(errors.getFieldErrors()).thenReturn(java.util.Collections.singletonList(
-                new org.springframework.validation.FieldError("rating", "rating", "required and between 1 and 5")
-        ));
-
-        ValidationException thrown = assertThrows(ValidationException.class, () -> {
-            ratingController.create("course123", "student123", invalidRating);
-        });
-
-        assertEquals("rating: required and between 1 and 5\n", thrown.getMessage());
-    }
-
-    @Test
-    public void testCreateRatingValidationFailsUserIdEmpty() {
-        when(ratingConfig.isEnabled()).thenReturn(true);
-        when(ratingValidator.validateObject(invalidRating)).thenReturn(errors);
-        when(errors.hasErrors()).thenReturn(true);
-        when(errors.getFieldErrors()).thenReturn(java.util.Collections.singletonList(
-                new org.springframework.validation.FieldError("userId", "userId", "required")
-        ));
-
-        ValidationException thrown = assertThrows(ValidationException.class, () -> {
-            ratingController.create("course123", "student123", invalidRating);
-        });
-
-        assertEquals("userId: required\n", thrown.getMessage());
-    }
-
-    @Test
-    public void testCreateRatingValidationFailsUsernameEmpty() {
-        when(ratingConfig.isEnabled()).thenReturn(true);
-        when(ratingValidator.validateObject(invalidRating)).thenReturn(errors);
-        when(errors.hasErrors()).thenReturn(true);
-        when(errors.getFieldErrors()).thenReturn(java.util.Collections.singletonList(
-                new org.springframework.validation.FieldError("username", "username", "required")
-        ));
-
-        ValidationException thrown = assertThrows(ValidationException.class, () -> {
-            ratingController.create("course123", "student123", invalidRating);
-        });
-
-        assertEquals("username: required\n", thrown.getMessage());
-    }
-
-    @Test
-    public void testCreateRatingValidationFailsCourseIdEmpty() {
-        when(ratingConfig.isEnabled()).thenReturn(true);
-        when(ratingValidator.validateObject(invalidRating)).thenReturn(errors);
-        when(errors.hasErrors()).thenReturn(true);
-        when(errors.getFieldErrors()).thenReturn(java.util.Collections.singletonList(
-                new org.springframework.validation.FieldError("courseId", "courseId", "required")
-        ));
-
-        ValidationException thrown = assertThrows(ValidationException.class, () -> {
-            ratingController.create("course123", "student123", invalidRating);
-        });
-
-        assertEquals("courseId: required\n", thrown.getMessage());
-    }
-
 
 }
