@@ -14,10 +14,17 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.runner.RunWith;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -98,11 +105,12 @@ public class RatingControllerUnitaryTest {
     String studentId = "student1";
     Rating newRating = constructorRating(null, "Great course!", 5, "user1", courseId, "user");
     Rating savedRating = constructorRating("rating1", "Great course!", 5, "user1", courseId, "user");
+    String token = "Bearer validToken";
 
     when(ratingConfig.isEnabled()).thenReturn(true);
     when(restTemplate.getForObject("/api/v1/students/{studentId}", StudentDto.class, studentId)).thenReturn(studentDto);
     when(ratingService.saveRating(any(Rating.class))).thenReturn(savedRating);
-    ResponseEntity<Rating> response = ratingController.create(courseId, studentId, newRating);
+    ResponseEntity<Rating> response = ratingController.create(courseId, token, newRating);
     assertEquals(HttpStatus.OK, response.getStatusCode());
     Rating returnedRating = response.getBody();
     assertNotNull(returnedRating);
@@ -115,6 +123,7 @@ public class RatingControllerUnitaryTest {
     public void testDelete_Success() throws Exception {
         // Mock data
         String courseId = "course1";
+        String token = "Bearer validToken";
         String ratingId = "rate1";
 
         // Mock behavior
@@ -123,7 +132,7 @@ public class RatingControllerUnitaryTest {
         when(ratingService.findRatingById(ratingId)).thenReturn(existingRating);
 
         // Call the method
-        ResponseEntity<MessageResponse> response = ratingController.delete(courseId,ratingId);
+        ResponseEntity<MessageResponse> response = ratingController.delete(courseId,token,ratingId);
 
         // Assertions
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -134,15 +143,15 @@ public class RatingControllerUnitaryTest {
     @Test
     public void testUpdateRating() throws Exception {
         String courseId = "course1";
+        String token = "Bearer validToken";
         String ratingId = "rating1";
-        Rating existingRating = constructorRating("rate1","No me ha gustado nada",1,"user1","course1");
-        Rating updatedRating = constructorRating("rate1", "Bueno, tampoco estaba tan mal", 2, "user1", "course1");
+        Rating existingRating = constructorRating("rate1","No me ha gustado nada",1,"user1","course1", "user");
+        Rating updatedRating = constructorRating("rate1", "Bueno, tampoco estaba tan mal", 2, "user1", "course1", "user");
 
         when(ratingService.findRatingById(ratingId)).thenReturn(existingRating);
         when(ratingService.updateRating(any(Rating.class), eq(ratingId))).thenReturn(updatedRating);
 
-
-        ResponseEntity<Rating> response = ratingController.update(courseId, ratingId, updatedRating);
+        ResponseEntity<Rating> response = ratingController.update(courseId, ratingId, token, updatedRating);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         Rating returnedRating = response.getBody();
@@ -153,7 +162,7 @@ public class RatingControllerUnitaryTest {
 
     @Test
     public void testFindRatingById() throws Exception {
-        Rating rating = constructorRating("rate1","No me ha gustado nada",1,"user1","course1");
+        Rating rating = constructorRating("rate1","No me ha gustado nada",1,"user1","course1", "user");
         when(ratingService.findRatingById("rate1")).thenReturn(rating);
 
         ResponseEntity<Rating> response = ratingController.findById("rate1");
@@ -168,7 +177,7 @@ public class RatingControllerUnitaryTest {
     @Test
     public void testFindRatingByCourse() throws Exception {
 
-        Rating rating = constructorRating("rate1","No me ha gustado nada",1,"user1","course1");
+        Rating rating = constructorRating("rate1","No me ha gustado nada",1,"user1","course1", "user");
         when(ratingService.findAllRatingsByCourse("course1")).thenReturn((Arrays.asList(rating)));
 
         ResponseEntity<List<Rating>> response = ratingController.findAllByCourse("course1");

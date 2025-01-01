@@ -1,6 +1,7 @@
 package com.mongodb.starter.rating;
 
 import java.util.List;
+
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -14,8 +15,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.ResourceAccessException;
@@ -23,6 +24,7 @@ import org.springframework.web.client.RestTemplate;
 
 import com.mongodb.starter.exceptions.ValidationException;
 import com.mongodb.starter.student.StudentDto;
+import com.mongodb.starter.student.UserService;
 import com.mongodb.starter.util.MessageResponse;
 import com.mongodb.starter.util.RestPreconditions;
 
@@ -38,41 +40,46 @@ public class RatingController {
     private final RatingService ratingService;
     private final RestTemplate restTemplate;
     private final RatingConfig ratingConfig;
+    private final UserService userService;
     private final RatingValidator ratingValidator;
 
     
     @Autowired
-    public RatingController(RatingService ratingService, RestTemplate restTemplate, RatingConfig ratingConfig, RatingValidator ratingValidator) {
+    public RatingController(RatingService ratingService, RestTemplate restTemplate, RatingConfig ratingConfig, RatingValidator ratingValidator,  UserService userService) {
         this.ratingService = ratingService;
         this.restTemplate = restTemplate;
         this.ratingConfig = ratingConfig;
         this.ratingValidator = ratingValidator;
+        this.userService = userService;
     }
 
     //CREATE
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @CircuitBreaker(name = "createRating", fallbackMethod = "controllerFallback")
-    public ResponseEntity<Rating> create(@PathVariable("courseId") String courseId, 
-                                       @RequestParam("studentId") String studentId, 
-                                       @RequestBody @Valid Rating rating) {
+    public ResponseEntity<Rating> create(@PathVariable("courseId") String courseId,  
+                                         @RequestHeader("Authorization") String token,
+                                         @RequestBody @Valid Rating rating) {
         if (!ratingConfig.isEnabled()) {
             return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE);
         }
 
+        token = token.trim();
+        String userId = userService.extractUserId(token);
+
         Rating newRating = new Rating();
         BeanUtils.copyProperties(rating, newRating, "id");
         newRating.setCourseId(courseId);
-        newRating.setUserId(studentId); // Añadido para evitar userId null
 
-        // try {
-        //     StudentDto studentDto = restTemplate.getForObject("/api/v1/students/{studentId}", 
-        //                                                     StudentDto.class, studentId);
-        //     if (studentDto == null) {
-        //         return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        //     }
+        try {
+            StudentDto studentDto = restTemplate.getForObject("/api/v1/students/me", 
+                                                            StudentDto.class);
+            if (studentDto == null) {
+                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            }
             
             newRating.setUsername(studentDto.getUsername());
+            newRating.setUserId(userId);
             Errors errors = ratingValidator.validateObject(newRating);
             if(errors.hasErrors()) {
                 StringBuilder errorMessage = new StringBuilder();
@@ -84,65 +91,72 @@ public class RatingController {
                 }
                 throw new ValidationException(errorMessage.toString());
             }
-            
             Rating savedRating = this.ratingService.saveRating(newRating);
             Double mean = this.ratingService.ratingMean(courseId);
             
             return new ResponseEntity<>(savedRating, HttpStatus.CREATED);
-        } catch (Exception e) {
+        } catch (ResourceAccessException  e) {
             throw new ResourceAccessException("Service Unavailable");
-        }
+        } 
     }
 
-    public ResponseEntity<String> controllerFallback(String courseId, String studentId, 
+    public ResponseEntity<String> controllerFallback(String courseId, String token, 
                                                    Rating rating, Throwable throwable) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                            .body("Fallback Circuit Breaker Activo: " + throwable.getMessage());
     }
 
+    //UPDATE
+    @PutMapping("{ratingId}")
+    @ResponseStatus(HttpStatus.OK)
+    public ResponseEntity<Rating> update(@PathVariable("courseId") String courseId, @PathVariable("ratingId") String ratingId, @RequestHeader("Authorization") String token, @RequestBody @Valid Rating rating) {
+        
+        token = token.trim();
+        String userId = userService.extractUserId(token);
+        Rating aux = RestPreconditions.checkNotNull(ratingService.findRatingById(ratingId), "Rating", "ID", ratingId);
 
+        if(rating.getUserId().equals(userId)){
+            Errors errors = ratingValidator.validateObject(aux);
+            if(errors.hasErrors()) {
+                StringBuilder errorMessage = new StringBuilder();
+                for (org.springframework.validation.FieldError error : errors.getFieldErrors()) {
+                    errorMessage.append(error.getField())
+                                .append(": ")
+                                .append(error.getDefaultMessage())
+                                .append("\n");
+                }
+                throw new ValidationException(errorMessage.toString());
+            }
+            Rating res = ratingService.updateRating(rating, ratingId);
+            Double mean = this.ratingService.ratingMean(courseId);
+            //TODO: petición asíncrona a microservicio course para actualizar rating
+            return new ResponseEntity<>(res, HttpStatus.OK);
+        }
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+    }
+    
     //DELETE	
 	@DeleteMapping("{ratingId}")
 	@ResponseStatus(HttpStatus.OK)
-	public ResponseEntity<MessageResponse> delete(@PathVariable("courseId") String courseId, @PathVariable("ratingId") String ratingId) {
-		//TODO: petición a microservicio user para obtener el usuario loggeado
+	public ResponseEntity<MessageResponse> delete(@PathVariable("courseId") String courseId, @RequestHeader("Authorization") String token, @PathVariable("ratingId") String ratingId) {
+		
+        token = token.trim();
+        String userId = userService.extractUserId(token);
 		Rating rating = RestPreconditions.checkNotNull(ratingService.findRatingById(ratingId), "Rating", "ID", ratingId);
-		ratingService.deleteRating(ratingId);
-		Double mean = this.ratingService.ratingMean(courseId);
-		//TODO: petición asíncrona a microservicio course para actualizar rating
-		return new ResponseEntity<>(new MessageResponse("Rating deleted!"), HttpStatus.OK);
+		
+        if(rating.getUserId().equals(userId)){
+            ratingService.deleteRating(ratingId);
+            Double mean = this.ratingService.ratingMean(courseId);
+            //TODO: petición asíncrona a microservicio course para actualizar rating
+            return new ResponseEntity<>(new MessageResponse("Rating deleted!"), HttpStatus.OK);
+        }
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
 	}
 
-    //UPDATE
-
-	@PutMapping("{ratingId}")
-	@ResponseStatus(HttpStatus.OK)
-	public ResponseEntity<Rating> update(@PathVariable("courseId") String courseId, @PathVariable("ratingId") String ratingId, @RequestBody @Valid Rating rating) {
-		Rating aux = RestPreconditions.checkNotNull(ratingService.findRatingById(ratingId), "Rating", "ID", ratingId);
-		//TODO: petición a microservicio user para obtener el usuario loggeado
-		// Integer id = Integer.parseInt(userId);
-		// User loggedUser = userService.findUser(id);
-		// 	User paperUser = aux.getUser();
-		// 	if (loggedUser.getId().equals(paperUser.getId())) {
-        Errors errors = ratingValidator.validateObject(aux);
-        if(errors.hasErrors()) {
-            StringBuilder errorMessage = new StringBuilder();
-            for (org.springframework.validation.FieldError error : errors.getFieldErrors()) {
-                errorMessage.append(error.getField())
-                            .append(": ")
-                            .append(error.getDefaultMessage())
-                            .append("\n");
-            }
-            throw new ValidationException(errorMessage.toString());
-        }
-		Rating res = ratingService.updateRating(rating, ratingId);
-		Double mean = this.ratingService.ratingMean(courseId);
-		//TODO: petición asíncrona a microservicio course para actualizar rating
-		return new ResponseEntity<>(res, HttpStatus.OK);
-    }
 
     //GET BY ID
-
 	@GetMapping("{ratingId}")
 	public ResponseEntity<Rating> findById(@PathVariable("ratingId") String ratingId) {
 		Rating rating = RestPreconditions.checkNotNull(ratingService.findRatingById(ratingId), "Paper", "ID", ratingId);
