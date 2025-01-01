@@ -36,7 +36,7 @@ class RatingServiceIntegrationTest {
         existingRating.setRating(3);
         existingRating.setUserId("testUser");
         existingRating.setCourseId("course1");
-        
+
         ratingRepository.save(existingRating);
     }
 
@@ -98,8 +98,6 @@ class RatingServiceIntegrationTest {
     @Test
     void updateRating() {
         Rating existingRating = ratingRepository.save(createTestRating("course1"));
-        
-        // System.out.println("\n\nExistingRating: " + existingRating.getCourse());
 
         Rating updateData = new Rating();
         updateData.setDescription("Updated description");
@@ -107,10 +105,7 @@ class RatingServiceIntegrationTest {
         updateData.setUserId("updatedUser");
         updateData.setCourseId(existingRating.getCourseId());
 
-        // System.out.println("\n\nUpdateData: " + updateData.getCourse());
-
         Rating updatedRating = ratingService.updateRating(updateData, existingRating.getId());
-        //System.out.println("\n\nUpdatedRating: " + updatedRating.getCourse());
 
         assertThat(updatedRating)
             .satisfies(rating -> {
