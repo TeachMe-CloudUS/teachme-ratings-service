@@ -5,6 +5,9 @@ import java.util.List;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.Errors;
@@ -50,6 +53,9 @@ public class RatingController {
     @Value("${rating.url}")
     private String ratingUrl;
 
+    @Value("${student.url}")
+    private String studentServiceUrl;
+
     @Autowired
     public RatingController(RatingService ratingService, RestTemplate restTemplate, RatingConfig ratingConfig, RatingValidator ratingValidator,  UserService userService) {
         this.ratingService = ratingService;
@@ -59,7 +65,7 @@ public class RatingController {
         this.userService = userService;
     }
 
-    //CREATE
+  //CREATE
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @CircuitBreaker(name = "createRating", fallbackMethod = "controllerFallback")
@@ -78,13 +84,36 @@ public class RatingController {
         newRating.setCourseId(courseId);
 
         try {
-            StudentDto studentDto = restTemplate.getForObject("/api/v1/students/me", 
-                                                            StudentDto.class);
-            if (studentDto == null) {
-                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            HttpHeaders headers = new HttpHeaders();
+            String tokenToUse = token;
+            if (!token.startsWith("Bearer ")) {
+                tokenToUse = "Bearer " + token;
             }
-            
-            newRating.setUsername(studentDto.getUsername());
+            headers.set("Authorization", tokenToUse);
+
+            // Crea una entidad HTTP con los encabezados
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            // Llama al servicio con RestTemplate
+            ResponseEntity<StudentDto> response = restTemplate.exchange(
+            studentServiceUrl,  // URL del servicio
+            HttpMethod.GET,     // Método HTTP
+            entity,             // Entidad con encabezados
+            StudentDto.class    // Tipo de respuesta esperada
+        );
+
+        // Obtener el objeto StudentDto de la respuesta
+        StudentDto student = response.getBody();
+
+        // Acceder al campo "name"
+        if (student != null && student.getContactInformation() != null) {
+            String name = student.getContactInformation().getName();
+            newRating.setUsername(name);
+            System.out.println("Name: " + name);
+        } else {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+                       
             newRating.setUserId(userId);
             Errors errors = ratingValidator.validateObject(newRating);
             if(errors.hasErrors()) {
@@ -99,18 +128,16 @@ public class RatingController {
             }
             Rating savedRating = this.ratingService.saveRating(newRating);
             Double mean = this.ratingService.ratingMean(courseId);
-            updateCourseRating(courseId, mean);
-
+            
             return new ResponseEntity<>(savedRating, HttpStatus.CREATED);
         } catch (ResourceAccessException  e) {
             throw new ResourceAccessException("Service Unavailable");
         } 
     }
 
-    public ResponseEntity<String> controllerFallback(String courseId, String token, 
-                                                   Rating rating, Throwable throwable) {
+    public ResponseEntity<String> controllerFallback(Throwable throwable) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                           .body("Fallback Circuit Breaker Activo: " + throwable.getMessage());
+                .body("Fallback Circuit Breaker Activo: " + throwable.getMessage());
     }
 
     //UPDATE

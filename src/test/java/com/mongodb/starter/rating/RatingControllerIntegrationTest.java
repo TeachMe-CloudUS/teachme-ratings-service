@@ -9,13 +9,19 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.is;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -28,6 +34,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mongodb.starter.student.ContactInformation;
 import com.mongodb.starter.student.StudentDto;
 import com.mongodb.starter.student.UserService;
 
@@ -73,6 +80,9 @@ class RatingControllerIntegrationTest {
     @Autowired
     private RatingConfig ratingConfig;
 
+    @Value("${student.url}")
+    private String studentServiceUrl;
+
     @BeforeEach
     void setUp() {
         ratingRepository.deleteAll();
@@ -96,27 +106,32 @@ class RatingControllerIntegrationTest {
         rating.setDescription("description");
         rating.setRating(4);
         rating.setUserId("testUser");
+        ContactInformation contactInformation = new ContactInformation();
+        contactInformation.setName("Test User");
 
         StudentDto mockStudent = new StudentDto();
-        mockStudent.setUsername("username1");
+        mockStudent.setContactInformation(contactInformation);
 
         // Configurar el mock para una llamada exitosa inicial
-        when(restTemplate.getForObject(
-                eq("/api/v1/students/me"),
+        when(restTemplate.exchange(
+                eq(studentServiceUrl),
+                eq(HttpMethod.GET),
+                any(HttpEntity.class),
                 eq(StudentDto.class)
-        )).thenReturn(mockStudent);
+        )).thenReturn(ResponseEntity.ok(mockStudent));
 
         // Primera llamada exitosa
         mockMvc.perform(post("/api/v1/course/course1/ratings/")
                         .header("Authorization", VALID_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(rating)))
-                .andExpect(status().isCreated())
-                .andReturn();
+                .andExpect(status().isCreated());
 
         // Configurar el mock para simular fallos en llamadas posteriores
-        when(restTemplate.getForObject(
-                eq("/api/v1/students/me"),
+        when(restTemplate.exchange(
+                eq(studentServiceUrl),
+                eq(HttpMethod.GET),
+                any(HttpEntity.class),
                 eq(StudentDto.class)
         )).thenThrow(new ResourceAccessException("Service Unavailable"));
 
@@ -143,33 +158,40 @@ class RatingControllerIntegrationTest {
         rating.setRating(4);
         rating.setUserId("testUser");
 
+        ContactInformation contactInformation = new ContactInformation();
+        contactInformation.setName("Test User");
+
         StudentDto mockStudent = new StudentDto();
-        mockStudent.setUsername("username1");
+        mockStudent.setContactInformation(contactInformation);
 
         // Configurar fallos iniciales
-        when(restTemplate.getForObject(
-            eq("/api/v1/students/me"),
-            eq(StudentDto.class)
+        when(restTemplate.exchange(
+                eq(studentServiceUrl),
+                eq(HttpMethod.GET),
+                any(HttpEntity.class),
+                eq(StudentDto.class)
         )).thenThrow(new ResourceAccessException("Service Unavailable"));
 
-        // Provocar apertura del circuit breaker
+        // Provocar apertura del CircuitBreaker
         for (int i = 0; i < 6; i++) {
             mockMvc.perform(post("/api/v1/course/course1/ratings/")
-                    .header("Authorization", VALID_TOKEN)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(rating)))
+                            .header("Authorization", VALID_TOKEN)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(rating)))
                     .andExpect(status().isServiceUnavailable());
         }
 
         assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
 
         // Configurar éxito para la recuperación
-        when(restTemplate.getForObject(
-            eq("/api/v1/students/me"),
-            eq(StudentDto.class)
-        )).thenReturn(mockStudent);
+        when(restTemplate.exchange(
+                eq(studentServiceUrl),
+                eq(HttpMethod.GET),
+                any(HttpEntity.class),
+                eq(StudentDto.class)
+        )).thenReturn(ResponseEntity.ok(mockStudent));
 
-        // Esperar a que el circuit breaker cambie a HALF_OPEN
+        // Esperar a que el CircuitBreaker cambie a HALF_OPEN
         await()
             .atMost(7, TimeUnit.SECONDS)
             .until(() -> circuitBreaker.getState() == CircuitBreaker.State.HALF_OPEN);
@@ -177,13 +199,13 @@ class RatingControllerIntegrationTest {
         // Realizar llamadas exitosas en estado HALF_OPEN
         for (int i = 0; i < 3; i++) {
             mockMvc.perform(post("/api/v1/course/course1/ratings/")
-                    .header("Authorization", VALID_TOKEN)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(rating)))
+                            .header("Authorization", VALID_TOKEN)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(rating)))
                     .andExpect(status().isCreated());
         }
 
-        // Verificar que el circuit breaker se cierra después de las llamadas exitosas
+        // Verificar que el CircuitBreaker se cierra después de las llamadas exitosas
         await()
             .atMost(5, TimeUnit.SECONDS)
             .until(() -> circuitBreaker.getState() == CircuitBreaker.State.CLOSED);

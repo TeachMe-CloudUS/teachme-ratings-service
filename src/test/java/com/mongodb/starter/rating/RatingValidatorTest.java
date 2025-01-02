@@ -19,7 +19,7 @@ public class RatingValidatorTest {
     private RatingValidator validator = new RatingValidator();
 
     @Test
-    void validate_shouldPassForValidRating() {
+    public void validate_shouldPassForValidRating() {
         Rating rating = new Rating();
         rating.setDescription("A valid description.");
         rating.setRating(4);
@@ -34,7 +34,7 @@ public class RatingValidatorTest {
     }
 
     @Test
-    void validate_shouldFailForNullDescription() {
+    public void validate_shouldFailForNullDescription() {
         Rating rating = new Rating();
         rating.setDescription(null);
         rating.setRating(3);
@@ -49,7 +49,7 @@ public class RatingValidatorTest {
     }
 
     @Test
-    void validate_shouldFailForEmptyDescription() {
+    public void validate_shouldFailForEmptyDescription() {
         Rating rating = new Rating();
         rating.setDescription("");
         rating.setRating(3);
@@ -64,7 +64,7 @@ public class RatingValidatorTest {
     }
 
     @Test
-    void validate_shouldFailForTooLongDescription() {
+    public void validate_shouldFailForTooLongDescription() {
         Rating rating = new Rating();
         rating.setDescription("A".repeat(501));
         rating.setRating(3);
@@ -79,7 +79,7 @@ public class RatingValidatorTest {
     }
 
     @Test
-    void validate_shouldFailForInvalidRatingNumber() {
+    public void validate_shouldFailForInvalidRatingNumber() {
         Rating rating = new Rating();
         rating.setDescription("Valid description.");
         rating.setRating(6);
@@ -94,7 +94,7 @@ public class RatingValidatorTest {
     }
 
     @Test
-    void validate_shouldFailForInvalidRatingNumber2() {
+    public void validate_shouldFailForInvalidRatingNumber2() {
         Rating rating = new Rating();
         rating.setDescription("Valid description.");
         rating.setRating(0);
@@ -109,7 +109,7 @@ public class RatingValidatorTest {
     }
 
     @Test
-    void validate_shouldFailForEmptyUserId() {
+    public void validate_shouldFailForEmptyUserId() {
         Rating rating = new Rating();
         rating.setDescription("Valid description.");
         rating.setRating(4);
@@ -124,7 +124,7 @@ public class RatingValidatorTest {
     }
 
     @Test
-    void validate_shouldFailForEmptyUsername() {
+    public void validate_shouldFailForEmptyUsername() {
         Rating rating = new Rating();
         rating.setDescription("Valid description.");
         rating.setRating(4);
@@ -139,7 +139,7 @@ public class RatingValidatorTest {
     }
 
     @Test
-    void validate_shouldFailForEmptyCourseId() {
+    public void validate_shouldFailForEmptyCourseId() {
         Rating rating = new Rating();
         rating.setDescription("Valid description.");
         rating.setRating(4);
