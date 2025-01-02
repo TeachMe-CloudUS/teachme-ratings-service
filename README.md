@@ -1,6 +1,6 @@
 # TeachMe5
 
-TeachMe actúa únicamente como plataforma para conectar a usuarios con profesores.
-Los usuarios son personas que buscan conectar con profesores. Los proveedores de servicios (a partir de ahora profesores) son profesionales que ofrecen sus servicios a través de nuestra plataforma.
+TeachMe actúa como plataforma de enseñanza mediante cursos para estudiantes interesados.
+Los usuarios son personas que buscan realizar cursos, dichos cursos pueden ser cerficados profesionales que promuevan la inserción laboral.
 
 Microservicio de Valoraciones

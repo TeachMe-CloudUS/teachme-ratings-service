@@ -1,0 +1,53 @@
+name: TeachMe5-runner
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2. Set up JDK (Java 17 in this example, adjust as needed)
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin' # Use Eclipse Temurin JDK
+          java-version: '17'
+
+      # 3. Cache Maven dependencies
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # 4. Build the project and install dependencies from pom.xml
+      - name: Build and Install with Maven
+        run: mvn clean install
+      
+      # 5. Run tests with Maven
+      - name: Run Tests
+        run: mvn test
+     
+      # 6. Build Docker image
+      - name: Build Docker image
+        run: docker build -t rating-service .
+
+      # 7. Run Docker container
+      - name: Run Docker container
+        run: docker run -d -p 8080:8080 --name rating-service rating-service
+
+      # 8. Verify application is running (optional)
+      - name: Verify Application Health
+        run: |
+          sleep 15
+          curl -f http://localhost:8080 || (echo "Application did not start correctly" && exit 1)
