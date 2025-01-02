@@ -4,13 +4,12 @@ import java.util.List;
 
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.Errors;
-import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -20,9 +19,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import com.mongodb.starter.exceptions.ValidationException;
+import com.mongodb.starter.student.RatingUpdateDto;
 import com.mongodb.starter.student.StudentDto;
 import com.mongodb.starter.student.UserService;
 import com.mongodb.starter.util.MessageResponse;
@@ -43,7 +44,12 @@ public class RatingController {
     private final UserService userService;
     private final RatingValidator ratingValidator;
 
-    
+    @Value("${courses.url}")
+    private String coursesURL;
+
+    @Value("${rating.url}")
+    private String ratingUrl;
+
     @Autowired
     public RatingController(RatingService ratingService, RestTemplate restTemplate, RatingConfig ratingConfig, RatingValidator ratingValidator,  UserService userService) {
         this.ratingService = ratingService;
@@ -93,7 +99,8 @@ public class RatingController {
             }
             Rating savedRating = this.ratingService.saveRating(newRating);
             Double mean = this.ratingService.ratingMean(courseId);
-            
+            updateCourseRating(courseId, mean);
+
             return new ResponseEntity<>(savedRating, HttpStatus.CREATED);
         } catch (ResourceAccessException  e) {
             throw new ResourceAccessException("Service Unavailable");
@@ -129,7 +136,8 @@ public class RatingController {
             }
             Rating res = ratingService.updateRating(rating, ratingId);
             Double mean = this.ratingService.ratingMean(courseId);
-            //TODO: petición asíncrona a microservicio course para actualizar rating
+            updateCourseRating(courseId, mean);
+
             return new ResponseEntity<>(res, HttpStatus.OK);
         }
 
@@ -148,7 +156,8 @@ public class RatingController {
         if(rating.getUserId().equals(userId)){
             ratingService.deleteRating(ratingId);
             Double mean = this.ratingService.ratingMean(courseId);
-            //TODO: petición asíncrona a microservicio course para actualizar rating
+            updateCourseRating(courseId, mean);
+
             return new ResponseEntity<>(new MessageResponse("Rating deleted!"), HttpStatus.OK);
         }
 
@@ -169,5 +178,13 @@ public class RatingController {
 
 	}
 
+    private void updateCourseRating(String courseId, Double mean) {
+        try {
+            RatingUpdateDto ratingUpdate = new RatingUpdateDto(mean);
+            restTemplate.put(coursesURL + courseId + ratingUrl, ratingUpdate);
+        } catch (RestClientException e) {
+            System.err.println("Failed to update course rating: " + e.getMessage());
+        }
+    }
 
 }
