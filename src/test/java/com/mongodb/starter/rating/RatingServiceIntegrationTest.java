@@ -155,6 +155,7 @@ class RatingServiceIntegrationTest {
         minimumValidRating.setRating(1);
         minimumValidRating.setUserId("user1");
         minimumValidRating.setCourseId("course1");
+        minimumValidRating.setUsername("username1");
     
         Rating savedRating = ratingService.saveRating(minimumValidRating);
     

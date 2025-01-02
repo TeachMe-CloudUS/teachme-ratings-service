@@ -135,6 +135,11 @@ public class RatingController {
         } 
     }
 
+    public ResponseEntity<String> controllerFallback(Throwable throwable) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("Fallback Circuit Breaker Activo: " + throwable.getMessage());
+    }
+
     //UPDATE
     @PutMapping("{ratingId}")
     @ResponseStatus(HttpStatus.OK)
