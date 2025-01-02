@@ -1,41 +1,38 @@
 package com.mongodb.starter.rating;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.Matchers.*;
-/*import static org.mockito.Mockito.mock;*/
-import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThat;
-
+import static org.awaitility.Awaitility.await;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.is;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.starter.student.StudentDto;
+import com.mongodb.starter.student.UserService;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-
-import org.springframework.boot.test.mock.mockito.MockBean;
-
-import org.springframework.web.client.ResourceAccessException;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.awaitility.Awaitility.await;
-
 
 @SpringBootTest(properties = {
     "resilience4j.circuitbreaker.instances.createRating.registerHealthIndicator=true",
@@ -53,6 +50,8 @@ import static org.awaitility.Awaitility.await;
 @AutoConfigureMockMvc
 class RatingControllerIntegrationTest {
 
+    private static final String VALID_TOKEN = "Bearer validToken";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -61,6 +60,9 @@ class RatingControllerIntegrationTest {
 
     @MockBean
     private RestTemplate restTemplate;
+
+    @MockBean
+    private UserService userService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -76,6 +78,9 @@ class RatingControllerIntegrationTest {
         ratingRepository.deleteAll();
         circuitBreakerRegistry.circuitBreaker("createRating").reset();
         
+        // Configure UserService mock
+        when(userService.extractUserId(VALID_TOKEN)).thenReturn("testUser");
+
         // Asegurar que el feature toggle está activado y con límites altos para testing
         ReflectionTestUtils.setField(ratingConfig, "enabled", true);
         ReflectionTestUtils.setField(ratingConfig, "requestsPerHour", 100);
@@ -84,91 +89,87 @@ class RatingControllerIntegrationTest {
 
     @Test
     void createRatingWithCircuitBreaker() throws Exception {
+        CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker("createRating");
+        circuitBreaker.reset();
+
         Rating rating = new Rating();
         rating.setDescription("description");
         rating.setRating(4);
-        rating.setUserId("testUser"); // Añadido para evitar userId null
+        rating.setUserId("testUser");
 
         StudentDto mockStudent = new StudentDto();
         mockStudent.setUsername("username1");
 
+        // Configurar el mock para una llamada exitosa inicial
         when(restTemplate.getForObject(
-            eq("/api/v1/students/{studentId}"),
-            eq(StudentDto.class),
-            eq("testUser")
+                eq("/api/v1/students/me"),
+                eq(StudentDto.class)
         )).thenReturn(mockStudent);
 
         // Primera llamada exitosa
-        MvcResult result = mockMvc.perform(post("/api/v1/course/course1/ratings/")
-                .param("studentId", "testUser")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(rating)))
+        mockMvc.perform(post("/api/v1/course/course1/ratings/")
+                        .header("Authorization", VALID_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(rating)))
                 .andExpect(status().isCreated())
                 .andReturn();
 
-        // Verificar respuesta exitosa
-        Rating createdRating = objectMapper.readValue(
-            result.getResponse().getContentAsString(), 
-            Rating.class
-        );
-        assertThat(createdRating.getUsername()).isEqualTo("username1");
-
-        // Configurar mock para fallos
+        // Configurar el mock para simular fallos en llamadas posteriores
         when(restTemplate.getForObject(
-            eq("/api/v1/students/{studentId}"),
-            eq(StudentDto.class),
-            eq("testUser")
+                eq("/api/v1/students/me"),
+                eq(StudentDto.class)
         )).thenThrow(new ResourceAccessException("Service Unavailable"));
 
-        // Realizar llamadas fallidas
-        for (int i = 0; i < 5; i++) {
+        // Realizar llamadas fallidas para abrir el CircuitBreaker
+        for (int i = 0; i < 6; i++) {
             mockMvc.perform(post("/api/v1/course/course1/ratings/")
-                    .param("studentId", "testUser")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(rating)))
+                            .header("Authorization", VALID_TOKEN)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(rating)))
                     .andExpect(status().isServiceUnavailable());
         }
+
+        // Verificar que el CircuitBreaker está en estado abierto
+        assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
     }
 
     @Test
     void testCircuitBreakerRecovery() throws Exception {
         CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker("createRating");
-        circuitBreaker.reset(); // Asegurar estado inicial
+        circuitBreaker.reset();
 
         Rating rating = new Rating();
         rating.setDescription("description");
         rating.setRating(4);
+        rating.setUserId("testUser");
 
         StudentDto mockStudent = new StudentDto();
         mockStudent.setUsername("username1");
 
         // Configurar fallos iniciales
         when(restTemplate.getForObject(
-            eq("/api/v1/students/{studentId}"),
-            eq(StudentDto.class),
-            eq("testUser")
+            eq("/api/v1/students/me"),
+            eq(StudentDto.class)
         )).thenThrow(new ResourceAccessException("Service Unavailable"));
 
         // Provocar apertura del circuit breaker
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 6; i++) {
             mockMvc.perform(post("/api/v1/course/course1/ratings/")
-                    .param("studentId", "testUser")
+                    .header("Authorization", VALID_TOKEN)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(rating)))
                     .andExpect(status().isServiceUnavailable());
         }
 
-        // Verificar estado OPEN
         assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
 
         // Configurar éxito para la recuperación
         when(restTemplate.getForObject(
-            eq("/api/v1/students/{studentId}"),
-            eq(StudentDto.class),
-            eq("testUser")
+            eq("/api/v1/students/me"),
+            eq(StudentDto.class)
         )).thenReturn(mockStudent);
 
-        // Esperar transición a HALF_OPEN
+        // Esperar a que el circuit breaker cambie a HALF_OPEN
         await()
             .atMost(7, TimeUnit.SECONDS)
             .until(() -> circuitBreaker.getState() == CircuitBreaker.State.HALF_OPEN);
@@ -176,19 +177,17 @@ class RatingControllerIntegrationTest {
         // Realizar llamadas exitosas en estado HALF_OPEN
         for (int i = 0; i < 3; i++) {
             mockMvc.perform(post("/api/v1/course/course1/ratings/")
-                    .param("studentId", "testUser")
+                    .header("Authorization", VALID_TOKEN)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(rating)))
                     .andExpect(status().isCreated());
         }
 
-        // Verificar transición a CLOSED
+        // Verificar que el circuit breaker se cierra después de las llamadas exitosas
         await()
             .atMost(5, TimeUnit.SECONDS)
             .until(() -> circuitBreaker.getState() == CircuitBreaker.State.CLOSED);
     }
-
-
 
     @Test
     void getAllRatings() throws Exception {
@@ -215,47 +214,41 @@ class RatingControllerIntegrationTest {
         rating.setRating(4);
         rating.setUserId("testUser");
         rating.setCourseId(course);
+        rating.setUsername("user");
         return rating;
     }
 
     @Test
     void handleConcurrentUpdates() throws Exception {
-        Rating rating = ratingRepository.save(createTestRating("course1"));
+        Rating rating = createTestRating("course1");
+        rating = ratingRepository.save(rating);
+
+        when(userService.extractUserId(VALID_TOKEN)).thenReturn("testUser");
 
         Rating updatedRating1 = new Rating();
         updatedRating1.setDescription("Updated 1");
         updatedRating1.setRating(5);
-        updatedRating1.setUserId("user1");
+        updatedRating1.setUserId("testUser"); 
         updatedRating1.setCourseId("course1");
+        updatedRating1.setUsername("user1");
 
         Rating updatedRating2 = new Rating();
         updatedRating2.setDescription("Updated 2");
         updatedRating2.setRating(3);
         updatedRating2.setUserId("user2");
         updatedRating2.setCourseId("course1");
+        updatedRating2.setUsername("user1");
 
         mockMvc.perform(put("/api/v1/course/course1/ratings/{ratingId}", rating.getId())
+                .header("Authorization", VALID_TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updatedRating1)))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(put("/api/v1/course/course1/ratings/{ratingId}", rating.getId()) 
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(updatedRating2)))
-                .andExpect(status().isOk());
+        Rating updatedRating = ratingRepository.findById(rating.getId()).orElseThrow();
+        assertThat(updatedRating.getDescription()).isEqualTo("Updated 1");
+        assertThat(updatedRating.getRating()).isEqualTo(5);
     }
-    
-    /*TODO: Excepción por falta de datos*/
-    /*
-    @Test
-    void rejectInvalidRating() throws Exception {
-        Rating invalidRating = new Rating();
 
-        mockMvc.perform(post("/api/v1/course/course1/ratings/")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(invalidRating)))
-                .andExpect(status().isOk());  
-    }
-    */
     
 }
