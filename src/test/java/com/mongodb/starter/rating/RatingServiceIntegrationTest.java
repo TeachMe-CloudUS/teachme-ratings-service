@@ -41,7 +41,7 @@ class RatingServiceIntegrationTest {
     }
 
     @Test
-    void findAllRatings() {
+    public void findAllRatings() {
         ratingRepository.deleteAll();
 
         Rating rating1 = createTestRating("course1");
@@ -57,7 +57,7 @@ class RatingServiceIntegrationTest {
     }
 
     @Test
-    void findRatingById() {
+    public void findRatingById() {
         Rating rating = ratingRepository.save(createTestRating("course1"));
         Rating foundRating = ratingService.findRatingById(rating.getId());
 
@@ -73,13 +73,13 @@ class RatingServiceIntegrationTest {
     }
 
     @Test
-    void throwExceptionNonExistentRating() {
+    public void throwExceptionNonExistentRating() {
         assertThrows(ResourceNotFoundException.class, 
             () -> ratingService.findRatingById("nonexistent-id"));
     }
 
     @Test
-    void saveRating() {
+    public void saveRating() {
         Rating rating = createTestRating("course1");
         Rating savedRating = ratingService.saveRating(rating);
 
@@ -96,7 +96,7 @@ class RatingServiceIntegrationTest {
     }
 
     @Test
-    void updateRating() {
+    public void updateRating() {
         Rating existingRating = ratingRepository.save(createTestRating("course1"));
 
         Rating updateData = new Rating();
@@ -118,7 +118,7 @@ class RatingServiceIntegrationTest {
     }
 
     @Test
-    void throwExceptionWhenUpdatingNonExistentRating() {
+    public void throwExceptionWhenUpdatingNonExistentRating() {
         Rating updateData = createTestRating("course1");
 
         assertThrows(ResourceNotFoundException.class, 
@@ -126,14 +126,14 @@ class RatingServiceIntegrationTest {
     }
 
     @Test
-    void deleteRating() {
+    public void deleteRating() {
         Rating rating = ratingRepository.save(createTestRating("course1"));
         ratingService.deleteRating(rating.getId());
         assertThat(ratingRepository.findById(rating.getId())).isEmpty();
     }
 
     @Test
-    void throwExceptionWhenDeletingNonExistentRating() {
+    public void throwExceptionWhenDeletingNonExistentRating() {
         assertThrows(ResourceNotFoundException.class, 
             () -> ratingService.deleteRating("nonexistent-id"));
     }
@@ -149,7 +149,7 @@ class RatingServiceIntegrationTest {
     }
 
     @Test
-    void saveRatingWithMinimumValidValues() {
+    public void saveRatingWithMinimumValidValues() {
         Rating minimumValidRating = new Rating();
         minimumValidRating.setDescription("description");
         minimumValidRating.setRating(1);
@@ -163,7 +163,7 @@ class RatingServiceIntegrationTest {
     }
 
     @Test
-    void saveRatingWithCurrentDate() {
+    public void saveRatingWithCurrentDate() {
         Rating rating = createTestRating("course1");
         Rating savedRating = ratingService.saveRating(rating);
 
@@ -212,7 +212,7 @@ class RatingServiceIntegrationTest {
     */
 
     @Test
-    void shouldRespectFeatureToggleWhenSaving() {
+    public void shouldRespectFeatureToggleWhenSaving() {
         boolean originalState = ratingConfig.isEnabled();
         try {
             // Deshabilitamos el feature para esta prueba

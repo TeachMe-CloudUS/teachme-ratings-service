@@ -26,8 +26,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BeanPropertyBindingResult;
@@ -38,6 +40,7 @@ import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.starter.exceptions.ResourceNotFoundException;
 import com.mongodb.starter.exceptions.ValidationException;
+import com.mongodb.starter.student.ContactInformation;
 import com.mongodb.starter.student.StudentDto;
 import com.mongodb.starter.student.UserService;
 import com.mongodb.starter.util.MessageResponse;
@@ -74,6 +77,9 @@ public class RatingControllerUnitaryTest {
 
     private StudentDto studentDto = new StudentDto();
 
+    @Value("${student.url}")
+    private String studentServiceUrl;
+
 
     @BeforeEach
     public void setUp() {
@@ -87,7 +93,9 @@ public class RatingControllerUnitaryTest {
 
         studentDto = new StudentDto();
         studentDto.setId("user1");
-        studentDto.setUsername("user");
+        ContactInformation contactInformation = new ContactInformation();
+        contactInformation.setName("user");
+        studentDto.setContactInformation(contactInformation);
     }
 
     private Rating constructorRating(String id, String description, Integer rating_value, String userId, String courseId, String username){
@@ -106,27 +114,59 @@ public class RatingControllerUnitaryTest {
 
     @Test
     public void testCreateRating() throws Exception {
-    studentDto.setId("user1");
-    studentDto.setUsername("user1");
-    String courseId = "course1";
-    Rating newRating = constructorRating(null, "Great course!", 5, "user1", courseId, "user");
-    Rating savedRating = constructorRating("rating1", "Great course!", 5, "user1", courseId, "user");
-    String token = "Bearer validToken";
-    Errors errors = new BeanPropertyBindingResult(newRating, "rating");
+        // Preparar el objeto de estudiante simulado
+        StudentDto studentDto = new StudentDto();
+        studentDto.setId("user1");
+        ContactInformation contactInformation = new ContactInformation();
+        contactInformation.setName("user1");
+        studentDto.setContactInformation(contactInformation);
 
-    when(ratingConfig.isEnabled()).thenReturn(true);
-    when(userService.extractUserId(token)).thenReturn("user");
-    when(restTemplate.getForObject("/api/v1/students/me", StudentDto.class)).thenReturn(studentDto);
-    when(ratingService.saveRating(any(Rating.class))).thenReturn(savedRating);
-    when(ratingValidator.validateObject(any())).thenReturn(errors); 
+        // Datos de la calificación
+        String courseId = "course1";
+        Rating newRating = new Rating();
+        newRating.setDescription("Great course!");
+        newRating.setRating(5);
+        newRating.setCourseId(courseId);
+        newRating.setUserId("user");
+        newRating.setUsername("user1");
 
-    ResponseEntity<Rating> response = ratingController.create(courseId, token, newRating);
-    assertEquals(HttpStatus.CREATED, response.getStatusCode());
-    Rating returnedRating = response.getBody();
-    assertNotNull(returnedRating);
-    assertEquals("Great course!", returnedRating.getDescription());
+        // Respuesta simulada del guardado de la calificación
+        Rating savedRating = new Rating();
+        savedRating.setId("rating1");
+        savedRating.setDescription("Great course!");
+        savedRating.setRating(5);
+        savedRating.setCourseId(courseId);
+        savedRating.setUserId("user");
+        savedRating.setUsername("user1");
 
-    verify(ratingService, times(1)).saveRating(any(Rating.class));
+        // Token de prueba
+        String token = "Bearer validToken";
+
+        // Errores simulados
+        Errors errors = new BeanPropertyBindingResult(newRating, "rating");
+
+        // Configurar los mocks
+        when(ratingConfig.isEnabled()).thenReturn(true);
+        when(userService.extractUserId(token)).thenReturn("user");
+        when(restTemplate.exchange(eq(studentServiceUrl), eq(HttpMethod.GET), any(), eq(StudentDto.class)))
+                .thenReturn(new ResponseEntity<>(studentDto, HttpStatus.OK)); // Simulamos el exchange
+        when(ratingService.saveRating(any(Rating.class))).thenReturn(savedRating);
+        when(ratingValidator.validateObject(any())).thenReturn(errors);
+
+        // Llamar al método del controlador
+        ResponseEntity<Rating> response = ratingController.create(courseId, token, newRating);
+
+        // Verificar el estado de la respuesta
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+
+        // Obtener el objeto Rating de la respuesta
+        Rating returnedRating = response.getBody();
+        assertNotNull(returnedRating);
+        assertEquals("Great course!", returnedRating.getDescription());
+        assertEquals("user1", returnedRating.getUsername());
+
+        // Verificar que el método de guardar la calificación se haya llamado una vez
+        verify(ratingService, times(1)).saveRating(any(Rating.class));
     }
 
     @Test
@@ -215,33 +255,45 @@ public class RatingControllerUnitaryTest {
 
     @Test
     public void create_shouldReturnNotFoundWhenStudentDtoIsNull() {
+        // Configuración de mocks
         when(ratingConfig.isEnabled()).thenReturn(true);
-        when(userService.extractUserId("token")).thenReturn("userId");
-        when(restTemplate.getForObject(anyString(), eq(StudentDto.class))).thenReturn(null);
+        when(userService.extractUserId("Bearer validToken")).thenReturn("userId");
 
-        ResponseEntity<Rating> response = ratingController.create("courseId", "token", new Rating());
+        // Simulamos que el servicio de estudiantes no devuelve datos
+        when(restTemplate.exchange(eq(studentServiceUrl), eq(HttpMethod.GET), any(), eq(StudentDto.class)))
+            .thenReturn(new ResponseEntity<>(HttpStatus.NOT_FOUND));
 
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode(), "Expected NOT_FOUND when StudentDto is null.");
+        // Llamada al controlador
+        ResponseEntity<Rating> response = ratingController.create("courseId", "Bearer validToken", new Rating());
+
+        // Verificar que la respuesta tenga el estado "NOT_FOUND"
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
 
     @Test
-    public void create_shouldHandleResourceAccessException() {
+    public void create_shouldHandleResourceAccessExceptionWhenServiceUnavailable() {
+        // Configuración de mocks
         when(ratingConfig.isEnabled()).thenReturn(true);
-        when(userService.extractUserId("token")).thenReturn("userId");
-        when(restTemplate.getForObject(anyString(), eq(StudentDto.class))).thenThrow(new ResourceAccessException("Service Unavailable"));
-
+        when(userService.extractUserId("Bearer validToken")).thenReturn("userId");
+    
+        // Simulamos que se lanza una ResourceAccessException
+        when(restTemplate.exchange(eq(studentServiceUrl), eq(HttpMethod.GET), any(), eq(StudentDto.class)))
+            .thenThrow(new ResourceAccessException("Service Unavailable"));
+    
+        // Verificar que la excepción es lanzada correctamente
         ResourceAccessException exception = assertThrows(ResourceAccessException.class, () -> {
-            ratingController.create("courseId", "token", new Rating());
+            ratingController.create("courseId", "Bearer validToken", new Rating());
         });
-
-        assertEquals("Service Unavailable", exception.getMessage(), "Expected ResourceAccessException with correct message.");
+    
+        // Verificar el mensaje de la excepción
+        assertEquals("Service Unavailable", exception.getMessage());
     }
 
     @Test
-    public void shouldReturnBadRequestWhenValidationFails() {
-        // Given
+    public void create_shouldReturnBadRequestWhenValidationFails() {
+        // Configuración de datos
         String courseId = "course123";
-        String token = "Bearer token";
+        String token = "Bearer validToken";
         String userId = "user123";
         
         Rating rating = new Rating();
@@ -250,27 +302,31 @@ public class RatingControllerUnitaryTest {
         rating.setDescription("Test comment");
         
         StudentDto studentDto = new StudentDto();
-        studentDto.setUsername("testUser");
+        ContactInformation contactInformation = new ContactInformation();
+        contactInformation.setName("testUser");
+        studentDto.setContactInformation(contactInformation);
         
+        // Simulando un error de validación
         Errors errors = new BeanPropertyBindingResult(rating, "rating");
         errors.rejectValue("rating", "invalid.rating", "Rating must be between 1 and 5");
         
-        // When
+        // Configuración de mocks
         when(ratingConfig.isEnabled()).thenReturn(true);
         when(userService.extractUserId(token)).thenReturn(userId);
-        when(restTemplate.getForObject(anyString(), eq(StudentDto.class)))
-            .thenReturn(studentDto);
+        when(restTemplate.exchange(eq(studentServiceUrl), eq(HttpMethod.GET), any(), eq(StudentDto.class)))
+            .thenReturn(new ResponseEntity<>(studentDto, HttpStatus.OK));
         when(ratingValidator.validateObject(any(Rating.class)))
             .thenReturn(errors);
-            
-        // Then
+        
+        // Verificar que se lanza la excepción de validación
         ValidationException exception = assertThrows(ValidationException.class, () -> {
             ratingController.create(courseId, token, rating);
         });
         
+        // Verificar que el mensaje de validación esté presente en la excepción
         assertTrue(exception.getMessage().contains("Rating must be between 1 and 5"));
-    
     }
+
 
 //UPDATE
 
