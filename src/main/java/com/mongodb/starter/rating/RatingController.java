@@ -1,6 +1,7 @@
 package com.mongodb.starter.rating;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,11 +23,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
-
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import com.mongodb.starter.exceptions.ValidationException;
-import com.mongodb.starter.student.RatingUpdateDto;
 import com.mongodb.starter.student.StudentDto;
 import com.mongodb.starter.student.UserService;
 import com.mongodb.starter.util.MessageResponse;
@@ -41,11 +41,23 @@ import jakarta.validation.Valid;
 @Tag(name = "Ratings", description = "The ratings management API")
 public class RatingController {
     
+    @Autowired
     private final RatingService ratingService;
+    
+    @Autowired
     private final RestTemplate restTemplate;
+    
+    @Autowired
     private final RatingConfig ratingConfig;
+    
+    @Autowired
     private final UserService userService;
+    
+    @Autowired
     private final RatingValidator ratingValidator;
+
+    @Autowired
+    private WebClient.Builder webClientBuilder;
 
     @Value("${courses.url}")
     private String coursesURL;
@@ -56,7 +68,6 @@ public class RatingController {
     @Value("${student.url}")
     private String studentServiceUrl;
 
-    @Autowired
     public RatingController(RatingService ratingService, RestTemplate restTemplate, RatingConfig ratingConfig, RatingValidator ratingValidator,  UserService userService) {
         this.ratingService = ratingService;
         this.restTemplate = restTemplate;
@@ -208,10 +219,21 @@ public class RatingController {
 
     private void updateCourseRating(String courseId, Double mean) {
         try {
-            RatingUpdateDto ratingUpdate = new RatingUpdateDto(mean);
-            restTemplate.put(coursesURL + courseId + ratingUrl, ratingUpdate);
-        } catch (RestClientException e) {
-            System.err.println("Failed to update course rating: " + e.getMessage());
+            // Realizar la solicitud PATCH
+            webClientBuilder.build().patch()
+                    .uri(coursesURL+courseId+ratingUrl)
+                    .bodyValue(Map.of("rating", mean))
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block(); // Bloquea la operación para simplificar la ejecución
+
+            
+        } catch (WebClientResponseException e) {
+            // Manejar errores específicos de HTTP
+            System.err.println("Error HTTP: " + e.getStatusCode() + " - " + e.getResponseBodyAsString());
+        } catch (Exception e) {
+            // Manejar otros errores
+            System.err.println("Error inesperado: " + e.getMessage());
         }
     }
 
