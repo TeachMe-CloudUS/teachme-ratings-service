@@ -128,6 +128,7 @@ public class RatingController {
             }
             Rating savedRating = this.ratingService.saveRating(newRating);
             Double mean = this.ratingService.ratingMean(courseId);
+            updateCourseRating(courseId, mean);
             
             return new ResponseEntity<>(savedRating, HttpStatus.CREATED);
         } catch (ResourceAccessException  e) {

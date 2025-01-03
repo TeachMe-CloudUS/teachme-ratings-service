@@ -2,7 +2,6 @@ package com.mongodb.starter.rating;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -16,7 +15,7 @@ import org.springframework.validation.Errors;
 @RunWith(MockitoJUnitRunner.class)
 public class RatingValidatorTest {
     
-    private RatingValidator validator = new RatingValidator();
+    private final RatingValidator validator = new RatingValidator();
 
     @Test
     public void validate_shouldPassForValidRating() {
