@@ -3,7 +3,7 @@ name: TeachMe5-runner
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   build-and-run:
