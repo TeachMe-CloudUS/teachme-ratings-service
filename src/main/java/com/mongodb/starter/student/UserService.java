@@ -17,7 +17,7 @@ public class UserService {
     @Autowired
     private WebClient.Builder webClientBuilder;
 
-    @Value("${base.url}")
+    @Value("${auth.url}")
     private String baseUrl;
 
     public String getUserRoleById(String userId, String token) {
