@@ -46,7 +46,6 @@ import com.mongodb.starter.student.UserService;
 import com.mongodb.starter.util.MessageResponse;
 
 @SpringBootTest
-@AutoConfigureTestDatabase
 @RunWith(MockitoJUnitRunner.class)
 public class RatingControllerUnitaryTest {
 

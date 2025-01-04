@@ -32,7 +32,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import com.mongodb.starter.exceptions.ResourceNotFoundException;
 
 @SpringBootTest
-@AutoConfigureTestDatabase
 @RunWith(MockitoJUnitRunner.class)
 public class RatingServiceUnitaryTest{
 

@@ -3,16 +3,11 @@ package com.mongodb.starter.rating;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.Errors;
 
 @SpringBootTest
-@AutoConfigureTestDatabase
-@RunWith(MockitoJUnitRunner.class)
 public class RatingValidatorTest {
     
     private final RatingValidator validator = new RatingValidator();
