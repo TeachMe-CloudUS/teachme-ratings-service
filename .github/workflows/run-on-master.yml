@@ -37,6 +37,14 @@ jobs:
       # 5. Run tests with Maven
       - name: Run Tests
         run: mvn test
+        env:
+          AUTH_URL: 'http://localhost:8085/api/v1/users/'
+          RATING_URL: '/rating'
+          COURSES_URL: '/api/v1/courses/'
+          STUDENT_URL: 'http://student-service:8080/api/v1/students/me'
+          BASE_URL: 'http://localhost:8080'
+          MONGODB_USER: 'luciaperezromero07'
+          MONGODB_PASSWORD: ${{ secrets.MONGODB_PASSWORD }}
      
       # 6. Build Docker image
       - name: Build Docker image
