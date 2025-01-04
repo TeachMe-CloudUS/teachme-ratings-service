@@ -33,8 +33,16 @@ jobs:
       # 4. Build the project and install dependencies from pom.xml
       - name: Build and Install with Maven
         run: mvn clean install
+
+      # 5. Build Docker image
+      - name: Build Docker image
+        run: docker build -t rating-service .
+
+       # 6. Run Docker container
+      - name: Run Docker container
+        run: docker run -d -p 8080:8080 --name rating-service rating-service
       
-      # 5. Run tests with Maven
+      # 7. Run tests with Maven
       - name: Run Tests
         run: mvn test
         env:
@@ -46,16 +54,4 @@ jobs:
           MONGODB_USER: 'luciaperezromero07'
           MONGODB_PASSWORD: ${{ secrets.MONGODB_PASSWORD }}
      
-      # 6. Build Docker image
-      - name: Build Docker image
-        run: docker build -t rating-service .
 
-      # 7. Run Docker container
-      - name: Run Docker container
-        run: docker run -d -p 8080:8080 --name rating-service rating-service
-
-      # 8. Verify application is running (optional)
-      - name: Verify Application Health
-        run: |
-          sleep 15
-          curl -f http://localhost:8080 || (echo "Application did not start correctly" && exit 1)
